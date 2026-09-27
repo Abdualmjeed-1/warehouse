@@ -87,8 +87,10 @@ button,input,select,textarea{font-family:inherit}
 .products-list{display:flex;flex-direction:column;gap:10px}
 .product-card{background:var(--card);border-radius:12px;overflow:hidden;box-shadow:var(--shadow);display:flex;cursor:pointer;transition:transform .12s}
 .product-card:active{transform:scale(.985)}
-.product-image{width:74px;height:74px;background:#EEF1F5;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden}
+.product-image{width:74px;height:74px;background:#EEF1F5;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;overflow:hidden;position:relative}
 .product-image img{width:100%;height:100%;object-fit:cover;display:block}
+/* Says "there is more behind this one" without stealing room from the name. */
+.photo-count{position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.62);color:#fff;font-size:9.5px;font-weight:700;line-height:1;padding:3px 5px;border-radius:6px;font-variant-numeric:tabular-nums}
 .product-info{flex:1;min-width:0;padding:10px 12px;display:flex;flex-direction:column;justify-content:center;gap:4px}
 .product-name{font-weight:600;font-size:15.5px;color:#1F2937;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .product-details{font-size:12.5px;color:var(--gray)}
@@ -134,6 +136,11 @@ button,input,select,textarea{font-family:inherit}
 .form-textarea{min-height:76px}
 .input-group{display:flex;gap:8px}
 .input-group input{flex:1;min-width:0}
+/* The unit sits beside the amount because the two are read as one value
+   ("2.5 كيلو"), and the chevron is drawn on the left for the same reason the
+   sort control does it: the select itself is RTL. */
+.unit-select{flex:0 0 auto;width:106px;padding:11px 26px 11px 10px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:#FAFBFC;color:#1F2937;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23757575'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 9px center}
+.unit-select:focus{outline:none;border-color:var(--primary);background-color:#fff}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0}
 .switch{position:relative;width:50px;height:30px;flex-shrink:0}
 .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:2}
@@ -151,6 +158,16 @@ button,input,select,textarea{font-family:inherit}
 .image-hero{width:100%;height:190px;background:#EEF1F5;border-radius:11px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--border)}
 .image-hero img{width:100%;height:100%;object-fit:cover;display:block}
 .image-hero span{font-size:64px;opacity:.5}
+/* The photo strip in the details sheet. Thumbs are 62 px — big enough to tell
+   two cartons apart, small enough that six of them still fit one row. */
+.photo-strip{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;-webkit-overflow-scrolling:touch}
+.photo-thumb{position:relative;width:62px;height:62px;flex:0 0 auto;border-radius:9px;overflow:hidden;border:2px solid transparent;background:#EEF1F5;padding:0}
+.photo-thumb.active{border-color:var(--primary)}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-thumb .photo-cover{position:absolute;bottom:2px;right:2px;font-size:9px;line-height:1;background:rgba(0,0,0,.62);color:#fff;border-radius:4px;padding:2px 3px}
+.photo-tools{position:absolute;top:2px;left:2px;display:flex;flex-direction:column;gap:2px}
+.photo-tools button{width:18px;height:18px;border:0;border-radius:5px;background:rgba(0,0,0,.62);color:#fff;font-size:10px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
+.photo-add-row{display:flex;gap:8px;margin-top:9px}
 
 /* ---------- Quantity ---------- */
 .quantity-control{display:flex;align-items:center;gap:18px;justify-content:center;margin:6px 0 2px}
@@ -158,6 +175,10 @@ button,input,select,textarea{font-family:inherit}
 .qty-btn:active{transform:scale(.93);background:var(--primary-dark)}
 .qty-btn[disabled]{background:#CBD2DA;pointer-events:none}
 .qty-display{font-size:31px;font-weight:700;min-width:78px;text-align:center;font-variant-numeric:tabular-nums}
+/* The unit rides inside the same number rather than beside it at the same
+   size, because "2.5 كيلو" is one value. Smaller and lighter so the amount
+   stays the thing being read, and RTL-safe without a margin on either side. */
+.qty-unit{font-size:14px;font-weight:500;color:var(--gray);margin-inline-start:5px}
 
 /* ---------- Info rows ---------- */
 .info-row{padding:11px 12px;background:#F5F7F9;border-radius:10px;font-size:14px;word-break:break-word;line-height:1.55}
@@ -380,25 +401,27 @@ button,input,select,textarea{font-family:inherit}
     </div>
     <div class="modal-body">
       <div class="form-group">
-        <label class="form-label">صورة المنتج <span style="font-weight:400;color:var(--gray)">(اختياري)</span></label>
-        <div class="image-row">
-          <div class="image-preview" id="image-preview"><span>📦</span></div>
-          <div class="image-actions">
-            <button class="btn btn-outline btn-sm" data-action="capture-photo">📷 كاميرا</button>
-            <button class="btn btn-outline btn-sm" data-action="select-photo">🖼️ المكتبة</button>
-            <button class="btn btn-ghost btn-sm" id="btn-remove-image" data-action="remove-photo" style="display:none">🗑️ حذف الصورة</button>
-          </div>
+        <label class="form-label">صور المنتج <span style="font-weight:400;color:var(--gray)">(اختياري · حتى 6)</span></label>
+        <div class="photo-strip" id="form-photos"></div>
+        <div class="photo-add-row">
+          <button class="btn btn-outline btn-sm" data-action="capture-photo">📷 كاميرا</button>
+          <button class="btn btn-outline btn-sm" data-action="select-photo">🖼️ المكتبة</button>
         </div>
+        <span class="form-hint" id="photos-hint"></span>
       </div>
 
       <div class="form-group">
         <label class="form-label" for="product-name">اسم المنتج *</label>
-        <input type="text" id="product-name" class="form-input" placeholder="مثال: ماء أكوافينا 600 مل" autocomplete="off">
+        <input type="text" id="product-name" class="form-input" placeholder="مثال: Aquafina Water 600 ml" autocomplete="off">
       </div>
 
       <div class="form-group">
         <label class="form-label" for="product-quantity">الكمية *</label>
-        <input type="number" id="product-quantity" class="form-input" placeholder="0" min="0" step="1" inputmode="numeric">
+        <div class="input-group">
+          <input type="number" id="product-quantity" class="form-input" placeholder="0" min="0" step="1" inputmode="decimal">
+          <select id="product-unit" class="unit-select" aria-label="وحدة القياس"></select>
+        </div>
+        <span class="form-hint" id="quantity-hint"></span>
       </div>
 
       <div class="form-group">
@@ -489,7 +512,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.3.2';
+var APP_VERSION = '2.3.3';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -506,6 +529,25 @@ var ARCHIVE_AFTER_DAYS = 365;
    are left alone — they keep working, they are just larger. */
 var IMG_SIZE = 256;
 var IMG_QUALITY = 0.72;
+/* Six, not unlimited. Every photo is a base64 JPEG sitting in the same IndexedDB
+   record as the product, so the record is read whole on every open of the
+   details sheet — a dozen photos would make that read slow for no gain. Six
+   covers what a warehouse actually photographs: the front, the back, the
+   label, the expiry stamp, the shelf, the carton. */
+var MAX_IMAGES = 6;
+/* Quantity units. Gram and kilo are weighed, so their amounts are decimal and
+   their +/- buttons cannot step by 1 — a hundred taps to add 100 g is not a
+   control, it is a punishment. `decimals` is also the rounding the stored
+   number is held to, so 2.5 kg stays 2.5 kg and never 2.4999999. */
+var UNITS = [
+  { id: 'piece',  label: 'حبة',   step: 1,   decimals: 0 },
+  { id: 'carton', label: 'كرتون', step: 1,   decimals: 0 },
+  { id: 'gram',   label: 'قرام',  step: 100, decimals: 0 },
+  { id: 'kilo',   label: 'كيلو',  step: 1,   decimals: 2 }
+];
+/* Records written before units existed have no `unit` field. They were counted
+   in pieces, so that is what they read back as — no migration pass needed. */
+var DEFAULT_UNIT = 'piece';
 /* Every symbology a warehouse in Saudi Arabia is likely to meet. The mapping
    from the printed standard to the name ZXing uses is not one-to-one:
 
@@ -535,8 +577,12 @@ var BARCODE_FORMATS = [
 var db = null;
 var currentEditingId = null;
 var currentProductId = null;
-var pendingImage = null;      // data URL of the new thumbnail
-var removeImageFlag = false;
+/* The working photo list while the add/edit sheet is open. Seeded from the
+   record when the sheet opens, written back whole when it is saved. */
+var pendingImages = [];
+/* Which photo the details sheet shows large. View state only — it is never
+   stored, so the first photo stays the cover no matter what was last viewed. */
+var viewingPhoto = 0;
 var zxingReader = null;       // ZXing.MultiFormatReader, driven by our own loop
 var zxingHints = null;
 var scannerStream = null;     // the live MediaStream, so we can always release it
@@ -623,6 +669,54 @@ function plural(n, one, two, many) {
   if (n === 1) return one;
   if (n === 2) return two;
   return many;
+}
+
+/* ===================== Units ===================== */
+function unitInfo(id) {
+  for (var i = 0; i < UNITS.length; i++) if (UNITS[i].id === id) return UNITS[i];
+  return UNITS[0];
+}
+
+/* A record with no unit predates units entirely — it was counted in pieces. */
+function unitOf(product) { return (product && product.unit) || DEFAULT_UNIT; }
+
+function roundQty(value, decimals) {
+  var f = Math.pow(10, decimals);
+  return Math.round((Number(value) || 0) * f) / f;
+}
+
+/* Drop the trailing zeros a fixed-decimal format leaves behind, so 2.50 reads
+   as 2.5 and 3.00 as 3. */
+function trimZeros(text) {
+  if (text.indexOf('.') < 0) return text;
+  return text.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function formatAmount(value, unitId) {
+  var u = unitInfo(unitId);
+  var n = Number(value) || 0;
+  return u.decimals ? trimZeros(n.toFixed(u.decimals)) : String(Math.round(n));
+}
+
+/* Amount and unit together — "12 حبة", "2.5 كيلو". */
+function formatQty(value, unitId) {
+  return formatAmount(value, unitId) + ' ' + unitInfo(unitId).label;
+}
+
+/* ===================== Photos =====================
+   A product used to carry one photo in `image`. It carries a list now in
+   `images`, but records written before that change are still on people's
+   phones and have to keep working — so both shapes are read here, in one
+   place, always the same way, and nothing anywhere else touches either field. */
+function photosOf(product) {
+  if (!product) return [];
+  if (Array.isArray(product.images)) return product.images.filter(Boolean);
+  return product.image ? [product.image] : [];
+}
+
+function coverPhoto(product) {
+  var list = photosOf(product);
+  return list.length ? list[0] : null;
 }
 
 function daysText(n) {
@@ -915,15 +1009,17 @@ function sortProducts(list) {
 /* ===================== Rendering ===================== */
 function productCardHTML(p) {
   var st = getProductStatus(p.expiryDate);
-  var image = p.image
-    ? '<img src="' + esc(p.image) + '" alt="">'
+  var photos = photosOf(p);
+  var image = photos.length
+    ? '<img src="' + esc(photos[0]) + '" alt="">' +
+      (photos.length > 1 ? '<span class="photo-count">' + photos.length + ' 📷</span>' : '')
     : '📦';
   var dayTxt = st.daysLeft < 0 ? Math.abs(st.daysLeft) + ' يوم' : (st.daysLeft === 0 ? 'اليوم' : st.daysLeft + ' يوم');
   return '<div class="product-card" data-action="open-details" data-product-id="' + esc(p.id) + '">' +
       '<div class="product-image">' + image + '</div>' +
       '<div class="product-info">' +
         '<div class="product-name">' + esc(p.name) + '</div>' +
-        '<div class="product-details">الكمية: <strong>' + esc(p.quantity) + '</strong> · ينتهي: <strong>' + fmtDate(p.expiryDate) + '</strong></div>' +
+        '<div class="product-details">الكمية: <strong>' + esc(formatQty(p.quantity, unitOf(p))) + '</strong> · ينتهي: <strong>' + fmtDate(p.expiryDate) + '</strong></div>' +
         '<div class="product-status ' + st.cls + '">' + st.label + ' · ' + dayTxt + '</div>' +
       '</div>' +
     '</div>';
@@ -1142,7 +1238,7 @@ function warningItemHTML(p) {
   var st = getProductStatus(p.expiryDate);
   return '<div class="warn-item' + (st.level === 'expired' ? ' expired' : '') + '" data-action="open-details" data-product-id="' + esc(p.id) + '">' +
       '<div class="warn-name">' + esc(p.name) + '</div>' +
-      '<div class="warn-line"><span>الكمية: <strong>' + esc(p.quantity) + '</strong></span><span>ينتهي: ' + fmtDate(p.expiryDate) + '</span></div>' +
+      '<div class="warn-line"><span>الكمية: <strong>' + esc(formatQty(p.quantity, unitOf(p))) + '</strong></span><span>ينتهي: ' + fmtDate(p.expiryDate) + '</span></div>' +
       '<div class="warn-line" style="margin-top:4px"><span class="warn-days">' + daysText(st.daysLeft) + '</span></div>' +
     '</div>';
 }
@@ -1176,8 +1272,47 @@ function showArchivedHistory() {
   }).catch(function () { showToast('تعذّر تحميل الأرشيف'); });
 }
 
+/* One thumbnail, shared by the add/edit sheet and the details sheet. The action
+   names differ because the two sheets save differently: the add/edit sheet
+   holds its list in memory until Save is pressed, while the details sheet has
+   no Save button and writes every change the moment it is made. */
+function photoThumbHTML(src, index, opts) {
+  opts = opts || {};
+  var tools = '';
+  if (opts.coverable && index > 0) {
+    tools += '<button type="button" data-action="' + opts.coverAction + '" data-index="' + index + '" aria-label="اجعلها الغلاف">⭐</button>';
+  }
+  if (opts.removable) {
+    tools += '<button type="button" data-action="' + opts.removeAction + '" data-index="' + index + '" aria-label="حذف الصورة">✕</button>';
+  }
+
+  var inner = '<img src="' + esc(src) + '" alt="">';
+  if (index === 0) inner += '<span class="photo-cover">غلاف</span>';
+  if (tools) inner += '<span class="photo-tools">' + tools + '</span>';
+
+  /* A div, not a button: the tools inside it are buttons, and a button may not
+     contain another button. The delegated handler walks up from the innermost
+     [data-action], so ✕ and ⭐ still win over the tap-to-view underneath. */
+  return '<div class="photo-thumb' + (opts.active === index ? ' active' : '') + '"' +
+    (opts.viewAction ? ' role="button" data-action="' + opts.viewAction + '" data-index="' + index + '"' : '') +
+    '>' + inner + '</div>';
+}
+
+/* The amount and its unit read as one value — "2.5 كيلو" — so the unit is set
+   smaller inside the big number rather than beside it at the same weight. */
+function qtyDisplayHTML(value, unitId) {
+  return esc(formatAmount(value, unitId)) +
+    '<span class="qty-unit">' + esc(unitInfo(unitId).label) + '</span>';
+}
+
+/* ===================== Details =====================
+   What the sheet on screen is showing. Kept here so tapping a thumbnail can
+   redraw the gallery without going back to IndexedDB for data it already has. */
+var detailsState = null;
+
 function openProductDetails(id) {
   currentProductId = id;
+  viewingPhoto = 0;
   return getProduct(id).then(function (product) {
     if (!product) {
       showToast('هذا المنتج لم يعد موجوداً');
@@ -1187,96 +1322,200 @@ function openProductDetails(id) {
       getHistoryByProductId(id),
       getArchivedHistoryByProductId(id).catch(function () { return []; })
     ]).then(function (res) {
-      var history = res[0];
-      var archived = res[1];
-      var st = getProductStatus(product.expiryDate);
-      var image = product.image
-        ? '<img src="' + esc(product.image) + '" alt="">'
-        : '<span>📦</span>';
-
-      var historyHTML = history.length
-        ? history.map(historyItemHTML).join('')
-        : '<div class="empty-state" style="padding:22px 10px"><p>لا يوجد سجل حركات بعد</p></div>';
-
-      /* Older moves are not gone, just set aside — so say how many there are
-         and let the user pull them into the same list on demand. */
-      var archiveBtn = archived.length
-        ? '<button type="button" class="btn btn-ghost btn-block btn-sm" data-action="show-archive" style="margin-top:10px">' +
-          '📜 عرض ' + archived.length + ' ' + plural(archived.length, 'حركة أقدم', 'حركتين أقدم', 'حركات أقدم') + '</button>'
-        : '';
-
-      $('details-body').innerHTML =
-        '<div class="image-hero" style="margin-bottom:16px">' + image + '</div>' +
-
-        '<div class="form-group"><label class="form-label">اسم المنتج</label>' +
-          '<div class="info-row">' + esc(product.name) + '</div></div>' +
-
-        '<div class="form-group"><label class="form-label">الكمية الحالية</label>' +
-          '<div class="quantity-control">' +
-            '<button class="qty-btn" data-action="increase-qty" aria-label="زيادة">+</button>' +
-            '<div class="qty-display">' + esc(product.quantity) + '</div>' +
-            '<button class="qty-btn" data-action="decrease-qty"' + (product.quantity > 0 ? '' : ' disabled') + ' aria-label="إنقاص">−</button>' +
-          '</div></div>' +
-
-        '<div class="form-group"><label class="form-label">الحالة</label>' +
-          '<div class="product-status ' + st.cls + '" style="font-size:13px;padding:6px 12px">' + st.label + ' · ' + daysText(st.daysLeft) + '</div></div>' +
-
-        '<div class="form-group"><label class="form-label">تاريخ الدخول</label>' +
-          '<div class="info-row">' + fmtDate(product.entryDate) + '</div></div>' +
-
-        '<div class="form-group"><label class="form-label">تاريخ الانتهاء</label>' +
-          '<div class="info-row">' + fmtDate(product.expiryDate) + '</div></div>' +
-
-        '<div class="form-group"><label class="form-label">رقم الباركود</label>' +
-          '<div class="info-row mono">' + (product.barcode ? esc(product.barcode) : 'لا يوجد') + '</div></div>' +
-
-        '<div class="form-group"><label class="form-label">ملاحظات</label>' +
-          '<div class="info-row">' + (product.notes ? esc(product.notes) : '—') + '</div></div>' +
-
-        '<div class="form-group"><label class="form-label history-label">📝 سجل الحركات (' + history.length + ')</label>' +
-          '<div class="history-list" style="max-height:260px;overflow-y:auto">' + historyHTML + '</div>' +
-          archiveBtn + '</div>' +
-
-        '<div class="button-group">' +
-          '<button class="btn btn-primary" data-action="edit-product">✏️ تعديل</button>' +
-          '<button class="btn btn-danger" data-action="delete-product">🗑️ حذف</button>' +
-        '</div>';
-
+      detailsState = { product: product, history: res[0], archived: res[1] };
+      renderDetailsBody();
       openModal('details-modal');
     });
   });
 }
 
-/* ===================== Quantity ===================== */
-function changeQuantity(delta) {
+/* Re-read the record and redraw. Used after a photo is added or removed from
+   the sheet, so what is on screen is what was actually written to the database
+   rather than what the code intended to write. */
+function refreshDetails() {
+  if (!currentProductId) return Promise.resolve();
+  var id = currentProductId;
+  return Promise.all([
+    getProduct(id),
+    getHistoryByProductId(id),
+    getArchivedHistoryByProductId(id).catch(function () { return []; })
+  ]).then(function (res) {
+    if (!res[0]) { closeModal('details-modal'); return renderProducts(); }
+    detailsState = { product: res[0], history: res[1], archived: res[2] };
+    renderDetailsBody();
+  });
+}
+
+function galleryHTML(product) {
+  var photos = photosOf(product);
+  if (!photos.length) return '<div class="image-hero"><span>📦</span></div>';
+
+  var index = Math.min(Math.max(viewingPhoto, 0), photos.length - 1);
+  var hero = '<div class="image-hero"><img src="' + esc(photos[index]) + '" alt=""></div>';
+  if (photos.length === 1) return hero;
+
+  var strip = photos.map(function (src, i) {
+    return photoThumbHTML(src, i, {
+      removable: true, coverable: true, active: index, viewAction: 'view-photo',
+      removeAction: 'remove-detail-photo', coverAction: 'make-detail-cover'
+    });
+  }).join('');
+
+  return hero + '<div class="photo-strip">' + strip + '</div>';
+}
+
+function renderDetailsBody() {
+  if (!detailsState) return;
+  var product = detailsState.product;
+  var history = detailsState.history;
+  var archived = detailsState.archived;
+  var st = getProductStatus(product.expiryDate);
+  var unit = unitOf(product);
+
+  var historyHTML = history.length
+    ? history.map(historyItemHTML).join('')
+    : '<div class="empty-state" style="padding:22px 10px"><p>لا يوجد سجل حركات بعد</p></div>';
+
+  /* Older moves are not gone, just set aside — so say how many there are
+     and let the user pull them into the same list on demand. */
+  var archiveBtn = archived.length
+    ? '<button type="button" class="btn btn-ghost btn-block btn-sm" data-action="show-archive" style="margin-top:10px">' +
+      '📜 عرض ' + archived.length + ' ' + plural(archived.length, 'حركة أقدم', 'حركتين أقدم', 'حركات أقدم') + '</button>'
+    : '';
+
+  /* Photos are added from here as well as from the edit sheet, because the
+     moment you most want to photograph a product is right after scanning it —
+     which lands on this sheet, not on the form. */
+  var photoTools = photosOf(product).length < MAX_IMAGES
+    ? '<div class="photo-add-row">' +
+        '<button class="btn btn-outline btn-sm" data-action="capture-detail-photo">📷 أضف صورة</button>' +
+        '<button class="btn btn-outline btn-sm" data-action="select-detail-photo">🖼️ من المكتبة</button>' +
+      '</div>'
+    : '<div class="form-hint">وصلت للحد الأقصى (' + MAX_IMAGES + ' صور)</div>';
+
+  $('details-body').innerHTML =
+    galleryHTML(product) + photoTools +
+
+    '<div class="form-group" style="margin-top:15px"><label class="form-label">اسم المنتج</label>' +
+      '<div class="info-row">' + esc(product.name) + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label">الكمية الحالية</label>' +
+      '<div class="quantity-control">' +
+        '<button class="qty-btn" data-action="increase-qty" aria-label="زيادة">+</button>' +
+        '<div class="qty-display">' + qtyDisplayHTML(product.quantity, unit) + '</div>' +
+        '<button class="qty-btn" data-action="decrease-qty"' + (Number(product.quantity) > 0 ? '' : ' disabled') + ' aria-label="إنقاص">−</button>' +
+      '</div>' +
+      '<span class="form-hint" style="text-align:center">كل ضغطة ' + esc(formatQty(unitInfo(unit).step, unit)) + '</span></div>' +
+
+    '<div class="form-group"><label class="form-label">الحالة</label>' +
+      '<div class="product-status ' + st.cls + '" style="font-size:13px;padding:6px 12px">' + st.label + ' · ' + daysText(st.daysLeft) + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label">تاريخ الدخول</label>' +
+      '<div class="info-row">' + fmtDate(product.entryDate) + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label">تاريخ الانتهاء</label>' +
+      '<div class="info-row">' + fmtDate(product.expiryDate) + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label">رقم الباركود</label>' +
+      '<div class="info-row mono">' + (product.barcode ? esc(product.barcode) : 'لا يوجد') + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label">ملاحظات</label>' +
+      '<div class="info-row">' + (product.notes ? esc(product.notes) : '—') + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label history-label">📝 سجل الحركات (' + history.length + ')</label>' +
+      '<div class="history-list" style="max-height:260px;overflow-y:auto">' + historyHTML + '</div>' +
+      archiveBtn + '</div>' +
+
+    '<div class="button-group">' +
+      '<button class="btn btn-primary" data-action="edit-product">✏️ تعديل</button>' +
+      '<button class="btn btn-danger" data-action="delete-product">🗑️ حذف</button>' +
+    '</div>';
+}
+
+/* Add, remove or reorder a product's photos straight from the details sheet.
+   There is no Save button on that sheet, so every change is written at once —
+   a photo the user just took must never be lost by closing the sheet. */
+function updateProductPhotos(mutate, message) {
+  if (!currentProductId) return Promise.resolve();
+  return getProduct(currentProductId).then(function (product) {
+    if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
+    var list = photosOf(product);
+    mutate(list);
+    product.images = list;
+    delete product.image;              /* one shape only, from here on */
+    if (viewingPhoto > list.length - 1) viewingPhoto = list.length - 1;
+    if (viewingPhoto < 0) viewingPhoto = 0;
+    return putProduct(product).then(function () {
+      showToast(message);
+      return refreshDetails();
+    });
+  }).catch(function (error) {
+    console.error(error);
+    showToast('تعذّر حفظ التعديل');
+  });
+}
+
+function addDetailPhoto(dataUrl) {
+  if (!currentProductId) return Promise.resolve();
+  return getProduct(currentProductId).then(function (product) {
+    if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
+    var list = photosOf(product);
+    if (list.length >= MAX_IMAGES) { showToast('الحد الأقصى ' + MAX_IMAGES + ' صور للمنتج'); return; }
+    list.push(dataUrl);
+    viewingPhoto = list.length - 1;    /* show the one just added */
+    product.images = list;
+    delete product.image;
+    return putProduct(product).then(function () {
+      showToast('تمت إضافة الصورة');
+      return refreshDetails();
+    });
+  }).catch(function (error) {
+    console.error(error);
+    showToast('تعذّر حفظ الصورة');
+  });
+}
+
+/* ===================== Quantity =====================
+   One tap is one step of the product's own unit, not one unit of "something":
+   100 g for a weighed product, 1 kg, 1 piece, 1 carton. The step is written
+   into the history line too, so a move says what it actually moved rather than
+   always claiming "قطعة" for a product counted in kilos. */
+function changeQuantity(direction) {
   if (!currentProductId) return Promise.resolve();
   return getProduct(currentProductId).then(function (product) {
     if (!product) { showToast('هذا المنتج لم يعد موجوداً'); closeModal('details-modal'); return renderProducts(); }
+    var u = unitInfo(unitOf(product));
     var oldQty = Number(product.quantity) || 0;
-    var newQty = oldQty + delta;
+    var newQty = roundQty(oldQty + direction * u.step, u.decimals);
     if (newQty < 0) return;
     product.quantity = newQty;
     return putProduct(product).then(function () {
       return addHistory({
         productId: currentProductId,
-        action: delta > 0 ? 'إضافة قطعة' : 'إخراج قطعة',
+        action: (direction > 0 ? 'إضافة ' : 'إخراج ') + formatQty(u.step, u.id),
         oldQty: oldQty,
         newQty: newQty,
         timestamp: Date.now()
       });
     }).then(function () {
-      showToast(delta > 0 ? 'تمت الإضافة — الكمية الآن ' + newQty : 'تم الإخراج — المتبقي ' + newQty);
-      refreshDetailsQuantity(newQty, delta);
+      showToast(direction > 0
+        ? 'تمت الإضافة — الكمية الآن ' + formatQty(newQty, u.id)
+        : 'تم الإخراج — المتبقي ' + formatQty(newQty, u.id));
+      refreshDetailsQuantity(newQty, u.id, direction, u.step);
       return renderProducts();
     });
   });
 }
 
 /* Update the open details modal in place so the scroll position is kept */
-function refreshDetailsQuantity(newQty, delta) {
+function refreshDetailsQuantity(newQty, unitId, direction, step) {
   var modal = $('details-modal');
   var display = modal.querySelector('.qty-display');
-  if (display) display.textContent = newQty;
+  if (display) display.innerHTML = qtyDisplayHTML(newQty, unitId);
+
+  /* Keep the cached copy in step, so a later redraw (a photo change, say) does
+     not roll the quantity back to what it was when the sheet was opened. */
+  if (detailsState && detailsState.product) detailsState.product.quantity = newQty;
 
   var decBtn = modal.querySelector('[data-action="decrease-qty"]');
   if (decBtn) decBtn.disabled = newQty <= 0;
@@ -1290,8 +1529,8 @@ function refreshDetailsQuantity(newQty, delta) {
   var item = document.createElement('div');
   item.className = 'history-item';
   item.innerHTML = '<span class="history-date">' + fmtDateTime(Date.now()) + '</span>' +
-    '<span class="history-text">' + (delta > 0 ? 'إضافة قطعة' : 'إخراج قطعة') +
-    ' · الكمية ' + (newQty - delta) + ' ← ' + newQty + '</span>';
+    '<span class="history-text">' + (direction > 0 ? 'إضافة ' : 'إخراج ') + esc(formatQty(step, unitId)) +
+    ' · الكمية ' + esc(formatAmount(newQty - direction * step, unitId)) + ' ← ' + esc(formatAmount(newQty, unitId)) + '</span>';
   list.insertBefore(item, list.firstChild);
 
   var label = modal.querySelector('.history-label');
@@ -1299,26 +1538,59 @@ function refreshDetailsQuantity(newQty, delta) {
 }
 
 /* ===================== Add / Edit ===================== */
-function setImagePreview(dataUrl) {
-  var preview = $('image-preview');
-  preview.innerHTML = dataUrl ? '<img src="' + esc(dataUrl) + '" alt="">' : '<span>📦</span>';
-  $('btn-remove-image').style.display = dataUrl ? '' : 'none';
+function renderFormPhotos() {
+  var strip = $('form-photos');
+  if (!strip) return;
+
+  strip.innerHTML = pendingImages.length
+    ? pendingImages.map(function (src, i) {
+        return photoThumbHTML(src, i, {
+          removable: true, coverable: true,
+          removeAction: 'remove-photo', coverAction: 'make-cover'
+        });
+      }).join('')
+    : '<div class="photo-thumb" style="display:flex;align-items:center;justify-content:center;font-size:24px;opacity:.5;border-style:dashed;border-color:#C9D0D8">📦</div>';
+
+  var left = MAX_IMAGES - pendingImages.length;
+  $('photos-hint').textContent = left > 0
+    ? 'تقدر تضيف ' + left + ' ' + plural(left, 'صورة', 'صورتين', 'صور') + ' زيادة'
+    : 'وصلت للحد الأقصى (' + MAX_IMAGES + ' صور)';
+}
+
+/* The amount field follows the unit: grams and kilos take decimals, pieces and
+   cartons do not, and the phone keyboard should match whichever is in use. */
+function applyUnitToForm() {
+  var u = unitInfo($('product-unit').value);
+  var input = $('product-quantity');
+  input.step = u.decimals ? '0.01' : '1';
+  input.inputMode = u.decimals ? 'decimal' : 'numeric';
+  $('quantity-hint').textContent = u.decimals
+    ? 'يقبل كسوراً عشرية — مثال: 2.5'
+    : 'عدد صحيح — مثال: 12';
+}
+
+function buildUnitOptions() {
+  $('product-unit').innerHTML = UNITS.map(function (u) {
+    return '<option value="' + u.id + '">' + u.label + '</option>';
+  }).join('');
 }
 
 function openAddProduct() {
   currentEditingId = null;
-  pendingImage = null;
-  removeImageFlag = false;
+  pendingImages = [];
   $('modal-title').textContent = 'إضافة منتج';
   $('product-name').value = '';
   $('product-quantity').value = '';
+  $('product-unit').value = DEFAULT_UNIT;
+  $('product-unit').dataset.prevUnit = DEFAULT_UNIT;
   $('product-entry-date').value = todayISO();
   $('product-expiry-date').value = '';
   $('product-barcode').value = '';
   $('product-notes').value = '';
   $('expiry-hint').textContent = '';
   $('barcode-hint').textContent = '';
-  setImagePreview(null);
+  applyUnitToForm();
+  renderFormPhotos();
   openModal('product-modal');
 }
 
@@ -1328,18 +1600,20 @@ function editProduct() {
   return getProduct(id).then(function (product) {
     if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
     currentEditingId = id;
-    pendingImage = null;
-    removeImageFlag = false;
+    pendingImages = photosOf(product);
     $('modal-title').textContent = 'تعديل المنتج';
     $('product-name').value = product.name || '';
-    $('product-quantity').value = product.quantity;
+    $('product-quantity').value = formatAmount(product.quantity, unitOf(product));
+    $('product-unit').value = unitOf(product);
+    $('product-unit').dataset.prevUnit = unitOf(product);
     $('product-entry-date').value = product.entryDate || '';
     $('product-expiry-date').value = product.expiryDate || '';
     $('product-barcode').value = product.barcode || '';
     $('product-notes').value = product.notes || '';
     $('barcode-hint').textContent = '';
     updateExpiryHint();
-    setImagePreview(product.image || null);
+    applyUnitToForm();
+    renderFormPhotos();
     closeModal('details-modal');
     openModal('product-modal');
   });
@@ -1367,63 +1641,77 @@ function updateExpiryHint() {
 function saveProduct() {
   var name = $('product-name').value.trim();
   var quantityRaw = $('product-quantity').value.trim();
+  var unit = unitInfo($('product-unit').value).id;
   var entryDate = $('product-entry-date').value;
   var expiryDate = $('product-expiry-date').value;
   var barcode = $('product-barcode').value.trim();
   var notes = $('product-notes').value.trim();
 
   if (!name) { showToast('يرجى إدخال اسم المنتج'); $('product-name').focus(); return Promise.resolve(); }
-  if (quantityRaw === '' || isNaN(parseInt(quantityRaw, 10)) || parseInt(quantityRaw, 10) < 0) {
+
+  /* A weighed product is stored as a number, not as a string: "2.5" has to
+     survive the round trip through the form, which parseInt would turn into 2.
+     A counted product still refuses 2.5 — a quarter of a carton is a typo, not
+     an amount — so the rule follows the unit that is selected. */
+  var stepDecimals = unitInfo(unit).decimals;
+  var quantity = Number(quantityRaw.replace(',', '.'));
+  var quantityOk = quantityRaw !== '' && isFinite(quantity) &&
+    (/^\d+(\.\d+)?$/.test(quantityRaw.replace(',', '.')));
+  if (!quantityOk || (stepDecimals === 0 && quantity % 1 !== 0)) {
+    showToast(stepDecimals === 0 ? 'يرجى إدخال كمية صحيحة' : 'يرجى إدخال كمية صحيحة (تقبل كسوراً عشرية)');
+    $('product-quantity').focus();
+    return Promise.resolve();
+  }
+  if (quantity < 0) {
     showToast('يرجى إدخال كمية صحيحة'); $('product-quantity').focus(); return Promise.resolve();
   }
+  quantity = roundQty(quantity, stepDecimals);
+
   if (!entryDate) { showToast('يرجى تحديد تاريخ الدخول'); return Promise.resolve(); }
   if (!expiryDate) { showToast('يرجى تحديد تاريخ الانتهاء'); return Promise.resolve(); }
   if (parseDateOnly(expiryDate) < parseDateOnly(entryDate)) {
     showToast('تاريخ الانتهاء لا يمكن أن يسبق تاريخ الدخول'); return Promise.resolve();
   }
 
-  var quantity = parseInt(quantityRaw, 10);
-
   return checkBarcodeConflict(barcode).then(function (conflict) {
     if (conflict) {
       var ok = confirm('الباركود «' + barcode + '» مستخدم بالفعل للمنتج: ' + conflict.name + '\n\nهل تريد الحفظ على أي حال؟');
       if (!ok) return;
     }
-    return getImageData().then(function (imageData) {
-      var data = {
-        name: name,
-        quantity: quantity,
-        entryDate: entryDate,
-        expiryDate: expiryDate,
-        barcode: barcode,
-        notes: notes,
-        image: imageData
-      };
+    var data = {
+      name: name,
+      quantity: quantity,
+      unit: unit,
+      entryDate: entryDate,
+      expiryDate: expiryDate,
+      barcode: barcode,
+      notes: notes,
+      images: pendingImages.slice()
+    };
 
-      if (currentEditingId) {
-        return getProduct(currentEditingId).then(function (old) {
-          data.id = currentEditingId;
-          return putProduct(data).then(function () {
-            return logEditHistory(old, data);
-          }).then(function () {
-            showToast('تم تحديث المنتج');
-            return afterSave();
-          });
+    if (currentEditingId) {
+      return getProduct(currentEditingId).then(function (old) {
+        data.id = currentEditingId;
+        return putProduct(data).then(function () {
+          return logEditHistory(old, data);
+        }).then(function () {
+          showToast('تم تحديث المنتج');
+          return afterSave();
         });
-      }
-      data.id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-      return putProduct(data).then(function () {
-        return addHistory({
-          productId: data.id,
-          action: 'إضافة منتج',
-          oldQty: 0,
-          newQty: quantity,
-          timestamp: Date.now()
-        });
-      }).then(function () {
-        showToast('تمت إضافة المنتج');
-        return afterSave();
       });
+    }
+    data.id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    return putProduct(data).then(function () {
+      return addHistory({
+        productId: data.id,
+        action: 'إضافة منتج',
+        oldQty: 0,
+        newQty: quantity,
+        timestamp: Date.now()
+      });
+    }).then(function () {
+      showToast('تمت إضافة المنتج');
+      return afterSave();
     });
   }).catch(function (error) {
     console.error(error);
@@ -1439,23 +1727,21 @@ function checkBarcodeConflict(barcode) {
   });
 }
 
-function getImageData() {
-  if (pendingImage) return Promise.resolve(pendingImage);
-  if (removeImageFlag) return Promise.resolve(null);
-  if (currentEditingId) {
-    return getProduct(currentEditingId).then(function (p) { return p ? (p.image || null) : null; });
-  }
-  return Promise.resolve(null);
-}
-
+/* What changed, in the unit the product is counted in — "الكمية 4 ← 6 كيلو"
+   rather than a bare pair of numbers that could be anything. */
 function logEditHistory(oldP, newP) {
   var changes = [];
+  var oldUnit = unitOf(oldP);
+  var newUnit = unitOf(newP);
   if (oldP.name !== newP.name) changes.push('الاسم');
-  if (Number(oldP.quantity) !== Number(newP.quantity)) changes.push('الكمية ' + oldP.quantity + ' ← ' + newP.quantity);
+  if (Number(oldP.quantity) !== Number(newP.quantity) || oldUnit !== newUnit) {
+    changes.push('الكمية ' + formatQty(oldP.quantity, oldUnit) + ' ← ' + formatQty(newP.quantity, newUnit));
+  }
   if (oldP.entryDate !== newP.entryDate) changes.push('تاريخ الدخول');
   if (oldP.expiryDate !== newP.expiryDate) changes.push('تاريخ الانتهاء');
   if ((oldP.barcode || '') !== (newP.barcode || '')) changes.push('الباركود');
   if ((oldP.notes || '') !== (newP.notes || '')) changes.push('الملاحظات');
+  if (photosOf(oldP).length !== photosOf(newP).length) changes.push('الصور');
   if (!changes.length) return Promise.resolve();
   return addHistory({
     productId: newP.id,
@@ -1468,8 +1754,7 @@ function logEditHistory(oldP, newP) {
 
 function afterSave() {
   closeModal('product-modal');
-  pendingImage = null;
-  removeImageFlag = false;
+  pendingImages = [];
   currentEditingId = null;
   return renderProducts().then(renderWarnings);
 }
@@ -1495,18 +1780,48 @@ function deleteCurrentProduct() {
   });
 }
 
-/* ===================== Photos ===================== */
+/* ===================== Photos =====================
+   One entry point for every photo the user supplies, from either sheet. The
+   two destinations differ in *when* the write happens, not in how the image is
+   prepared: the add/edit sheet keeps a working list in memory and writes it on
+   Save, while the details sheet has no Save button and writes each change the
+   moment it is made. */
+/* Where a photo picked from the camera or the library is headed.
+ *
+ * This is derived from which sheet is actually open rather than remembered
+ * from which button was pressed. The earlier version set a `photoTarget` flag
+ * in the click handler, which meant the destination depended on the order of
+ * two separate events: press a button, then a file arrives from the OS picker
+ * an arbitrary time later. Anything that reached the input without going
+ * through that exact button — a different trigger, a drag-and-drop, a
+ * re-entrant tap — silently filed the photo in the wrong place, or dropped it
+ * against the wrong record. Reading the open sheet at the moment of arrival is
+ * self-correcting: the photo can only land where the user is looking. */
+function photoDestination() {
+  var details = $('details-modal');
+  if (details && details.classList.contains('active')) return 'details';
+  return 'form';
+}
+
 function handlePhotoFile(file) {
   if (!file) return;
   if (!/^image\//.test(file.type)) { showToast('الملف المختار ليس صورة'); return; }
   if (file.size > 30 * 1024 * 1024) { showToast('الصورة كبيرة جداً (أكثر من 30 ميجابايت)'); return; }
+
+  var destination = photoDestination();
+  if (destination === 'form' && pendingImages.length >= MAX_IMAGES) {
+    showToast('الحد الأقصى ' + MAX_IMAGES + ' صور للمنتج');
+    return;
+  }
   showToast('جارٍ معالجة الصورة…');
 
   makeThumbnail(file).then(function (dataUrl) {
-    lookupImageToken++;   /* the user's own photo wins over any lookup image */
-    pendingImage = dataUrl;
-    removeImageFlag = false;
-    setImagePreview(dataUrl);
+    /* The user's own photo always wins over a photo that a lookup is still
+       fetching in the background. */
+    lookupImageToken++;
+    if (destination === 'details') return addDetailPhoto(dataUrl);
+    pendingImages.push(dataUrl);
+    renderFormPhotos();
     showToast('تمت إضافة الصورة');
   }).catch(function (err) {
     console.error(err);
@@ -1603,13 +1918,17 @@ function hasArabic(text) { return /[\u0600-\u06FF]/.test(text || ''); }
 
 /* Both name fields are filled in by volunteers and either one can be junk —
    one product has product_name_ar "Water" while product_name holds the real
-   Arabic name. So prefer whichever field is actually written in Arabic, and
-   fall back to product_name, which is the canonical one. */
+   Arabic name. So the test is not which field the name is *supposed* to be in,
+   it is which field is actually written in Latin script: the app now wants the
+   English name, and a field labelled "ar" that happens to hold Latin text is
+   exactly as good as one labelled "name". Arabic is the fallback, not the
+   preference — a product with no Latin name anywhere should still arrive with
+   a name. */
 function lookupName(product) {
-  var arabic = (product.product_name_ar || '').trim();
   var main = (product.product_name || '').trim();
-  if (hasArabic(arabic)) return arabic;
-  if (hasArabic(main)) return main;
+  var arabic = (product.product_name_ar || '').trim();
+  if (main && !hasArabic(main)) return main;
+  if (arabic && !hasArabic(arabic)) return arabic;
   return main || arabic;
 }
 
@@ -1645,13 +1964,15 @@ function fetchJson(url) {
   });
 }
 
-/* The Saudi catalogue is filled by the brand owners, so its Arabic field is the
-   good one — but it can still be empty or Latin, in which case the English name
-   beats showing nothing at all. */
+/* The Saudi catalogue keeps the two names in separate, reliably-labelled
+   fields, so here the English one can simply be asked for first. The Arabic
+   field is still the fallback: a product with no English name should arrive
+   with a name, not with nothing. */
 function npcName(product) {
-  var arabic = (product.productnamearabic || '').trim();
   var english = (product.productnameenglish || '').trim();
-  if (hasArabic(arabic)) return arabic;
+  var arabic = (product.productnamearabic || '').trim();
+  if (english && !hasArabic(english)) return english;
+  if (arabic && !hasArabic(arabic)) return arabic;
   return english || arabic;
 }
 
@@ -1788,11 +2109,15 @@ function applyLookupImage(url) {
     })
     .then(makeThumbnail)
     .then(function (dataUrl) {
-      /* A late arrival must never replace a photo the user chose themselves. */
-      if (token !== lookupImageToken || pendingImage) return;
-      pendingImage = dataUrl;
-      removeImageFlag = false;
-      setImagePreview(dataUrl);
+      /* A late arrival must never replace a photo the user chose themselves,
+         and it must never land on a sheet that has since been closed. The
+         token is bumped by every user-supplied photo, so an older fetch can
+         tell that it has been overtaken. */
+      if (token !== lookupImageToken) return;
+      if (photoDestination() !== 'form') return;
+      if (pendingImages.length >= MAX_IMAGES) return;
+      pendingImages.push(dataUrl);
+      renderFormPhotos();
     })
     .catch(function (error) { console.warn('lookup image failed', error); });
 }
@@ -2325,11 +2650,13 @@ function downloadBlob(blob, filename) {
 function exportToCSV() {
   return getAllProducts().then(function (products) {
     if (!products.length) { showToast('لا توجد بيانات للتصدير'); return; }
-    var rows = [['اسم المنتج', 'الكمية', 'تاريخ الدخول', 'تاريخ الانتهاء', 'الأيام المتبقية', 'الحالة', 'الباركود', 'الملاحظات']];
+    var rows = [['اسم المنتج', 'الكمية', 'الوحدة', 'تاريخ الدخول', 'تاريخ الانتهاء', 'الأيام المتبقية', 'الحالة', 'الباركود', 'الملاحظات']];
     sortProducts(products).forEach(function (p) {
       var st = getProductStatus(p.expiryDate);
+      var unit = unitOf(p);
       rows.push([
-        p.name, p.quantity, p.entryDate, p.expiryDate,
+        p.name, formatAmount(p.quantity, unit), unitInfo(unit).label,
+        p.entryDate, p.expiryDate,
         st.daysLeft, st.label, p.barcode || '', p.notes || ''
       ]);
     });
@@ -2385,15 +2712,28 @@ function handleBackupFile(file) {
     var clean = products.filter(function (p) {
       return p && p.id && p.name && p.expiryDate;
     }).map(function (p) {
+      /* Both photo shapes are accepted, because a backup taken before multiple
+         photos existed carries `image` and one taken after carries `images`.
+         Normalising to `images` here means the rest of the app only ever has
+         one shape to read. The unit is validated against the known list rather
+         than trusted: a backup edited by hand could name a unit that does not
+         exist, and unitInfo would then silently fall back to pieces while the
+         stored number stayed in kilos. */
+      var photos = Array.isArray(p.images) ? p.images.filter(Boolean)
+                 : (p.image ? [p.image] : []);
+      var unit = p.unit;
+      for (var i = 0; i < UNITS.length; i++) if (UNITS[i].id === unit) break;
+      if (i === UNITS.length) unit = DEFAULT_UNIT;
       return {
         id: String(p.id),
         name: String(p.name),
-        quantity: Number(p.quantity) || 0,
+        quantity: roundQty(Number(p.quantity) || 0, unitInfo(unit).decimals),
+        unit: unit,
         entryDate: p.entryDate || p.expiryDate,
         expiryDate: p.expiryDate,
         barcode: p.barcode ? String(p.barcode) : '',
         notes: p.notes ? String(p.notes) : '',
-        image: p.image || null
+        images: photos.slice(0, MAX_IMAGES)
       };
     });
 
@@ -2628,9 +2968,37 @@ var ACTIONS = {
   },
   'scanner-manual': function () { submitManualBarcode(); },
   'toggle-torch': function () { toggleTorch(); },
+  /* Both sheets share one pair of hidden file inputs; handlePhotoFile decides
+     the destination from whichever sheet is open when the file arrives. */
   'capture-photo': function () { $('photo-camera').click(); },
   'select-photo': function () { $('photo-library').click(); },
-  'remove-photo': function () { pendingImage = null; removeImageFlag = true; setImagePreview(null); },
+  'capture-detail-photo': function () { $('photo-camera').click(); },
+  'select-detail-photo': function () { $('photo-library').click(); },
+  /* The working list is edited in place; nothing is written until Save, so
+     backing out of the sheet leaves the stored record untouched. */
+  'remove-photo': function (el) {
+    pendingImages.splice(Number(el.dataset.index) || 0, 1);
+    renderFormPhotos();
+  },
+  'make-cover': function (el) {
+    var i = Number(el.dataset.index) || 0;
+    if (i < 0 || i >= pendingImages.length) return;
+    pendingImages.unshift(pendingImages.splice(i, 1)[0]);
+    renderFormPhotos();
+  },
+  /* The details sheet writes as it goes, so these three touch the database. */
+  'view-photo': function (el) {
+    viewingPhoto = Number(el.dataset.index) || 0;
+    if (detailsState) renderDetailsBody();
+  },
+  'remove-detail-photo': function (el) {
+    var i = Number(el.dataset.index) || 0;
+    updateProductPhotos(function (list) { list.splice(i, 1); }, 'تم حذف الصورة');
+  },
+  'make-detail-cover': function (el) {
+    var i = Number(el.dataset.index) || 0;
+    updateProductPhotos(function (list) { list.unshift(list.splice(i, 1)[0]); }, 'تم تعيين الغلاف');
+  },
   'save-product': function () { saveProduct(); },
   'increase-qty': function () { changeQuantity(1); },
   'decrease-qty': function () { changeQuantity(-1); },
@@ -2715,6 +3083,25 @@ function wireUp() {
 
   $('product-expiry-date').addEventListener('change', updateExpiryHint);
   $('product-entry-date').addEventListener('change', updateExpiryHint);
+
+  /* Switching from "حبة" to "كيلو" has to move the field with it: the step and
+     the keyboard change, and an amount that no longer makes sense as a whole
+     number (12 pieces, now kilos) is rounded to the new precision rather than
+     silently stored as 12.00 kg. */
+  $('product-unit').addEventListener('change', function () {
+    var before = unitInfo(this.dataset.prevUnit || this.value);
+    var after = unitInfo(this.value);
+    var field = $('product-quantity');
+    var amount = Number(String(field.value).replace(',', '.'));
+    if (field.value !== '' && isFinite(amount)) {
+      field.value = formatAmount(
+        roundQty(before.decimals === after.decimals ? amount : Math.round(amount), after.decimals),
+        after.id
+      );
+    }
+    this.dataset.prevUnit = after.id;
+    applyUnitToForm();
+  });
 
   $('photo-camera').addEventListener('change', function (e) {
     handlePhotoFile(e.target.files[0]);
@@ -2839,6 +3226,11 @@ function init() {
   }
   sortSelect.value = settings.sortBy;
   $('product-entry-date').value = todayISO();
+  /* Built once here rather than on every open of the sheet: the list is fixed,
+     and rebuilding it would silently reset the selection mid-edit. */
+  buildUnitOptions();
+  $('product-unit').value = DEFAULT_UNIT;
+  $('product-unit').dataset.prevUnit = DEFAULT_UNIT;
 
   wireUp();
 
