@@ -579,7 +579,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.7.0';
+var APP_VERSION = '2.7.1';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -3773,11 +3773,47 @@ function wireUp() {
 }
 
 /* ===================== PWA ===================== */
+/* Registering is where a published update is won or lost.
+   GitHub Pages serves every file with `Cache-Control: max-age=600`, and the
+   browser's HTTP cache is consulted for `sw.js` itself. So a plain register()
+   can keep the old worker alive for ten minutes after a deploy — and that old
+   worker then keeps serving the old page out of its own cache, which is
+   exactly how an update appears "not to have applied". `updateViaCache: 'none'`
+   takes the worker script out of the HTTP cache entirely, and the
+   controllerchange listener applies a new worker the moment it takes over
+   instead of waiting for the next launch. */
 function registerServiceWorker() {
   if (IS_NATIVE) return;          // assets are bundled — a SW would only add staleness
   if (!('serviceWorker' in navigator)) return;
   if (location.protocol === 'file:') return;
-  navigator.serviceWorker.register('sw.js').catch(function (e) {
+
+  /* A controller at this point means the app has been opened before, so what
+     follows is an update rather than a first install. */
+  var isUpdate = !!navigator.serviceWorker.controller;
+
+  /* Reloading under the user's fingers would throw away whatever they were
+     typing, so it only happens in the first moments after opening the app —
+     which is exactly when an update lands. Later than that we say so instead. */
+  var reloadArmed = true;
+  setTimeout(function () { reloadArmed = false; }, 6000);
+  var reloaded = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!isUpdate || reloaded) return;
+    if (!reloadArmed) { showToast('نسخة جديدة جاهزة — سكّر التطبيق وافتحه'); return; }
+    reloaded = true;
+    location.reload();
+  });
+
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+    /* An installed worker only looks for a new sw.js on navigation — and
+       inside a home-screen app a "navigation" can be days away. Ask on open,
+       and again whenever the app comes back to the foreground. */
+    reg.update().catch(function () {});
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') reg.update().catch(function () {});
+    });
+  }).catch(function (e) {
     console.warn('SW registration failed', e);
   });
 }
