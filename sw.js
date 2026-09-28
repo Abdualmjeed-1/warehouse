@@ -2,7 +2,7 @@
    يجعل التطبيق يعمل بدون إنترنت بالكامل بعد أول تحميل.
    عند تحديث أي ملف، غيّر رقم CACHE أدناه ليصل التحديث للجهاز. */
 
-const CACHE = 'tios-warehouse-v2.3.3';
+const CACHE = 'tios-warehouse-v2.7.0';
 
 const PRECACHE = [
   './',
