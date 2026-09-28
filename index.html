@@ -142,7 +142,7 @@ button,input,select,textarea{font-family:inherit}
 .input-group{display:flex;gap:8px}
 .input-group input{flex:1;min-width:0}
 /* The unit sits beside the amount because the two are read as one value
-   ("2.5 كيلو"), and the chevron is drawn on the left for the same reason the
+   ("2.5 kg"), and the chevron is drawn on the left for the same reason the
    sort control does it: the select itself is RTL. */
 .unit-select{flex:0 0 auto;width:106px;padding:11px 26px 11px 10px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:#FAFBFC;color:#1F2937;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23757575'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 9px center}
 .unit-select:focus{outline:none;border-color:var(--primary);background-color:#fff}
@@ -181,8 +181,11 @@ button,input,select,textarea{font-family:inherit}
 .qty-btn[disabled]{background:#CBD2DA;pointer-events:none}
 .qty-display{font-size:31px;font-weight:700;min-width:78px;text-align:center;font-variant-numeric:tabular-nums}
 /* The unit rides inside the same number rather than beside it at the same
-   size, because "2.5 كيلو" is one value. Smaller and lighter so the amount
-   stays the thing being read, and RTL-safe without a margin on either side. */
+   size, because "2.5 kg" is one value. Smaller and lighter so the amount
+   stays the thing being read. `.qty-value` is the wrapper from qtyDisplayHTML:
+   it is pinned to LTR in the markup, so inline-start below is the gap between
+   the amount and its unit rather than a gap on the far side of the unit. */
+.qty-value{unicode-bidi:isolate}
 .qty-unit{font-size:14px;font-weight:500;color:var(--gray);margin-inline-start:5px}
 
 /* ---------- Info rows ---------- */
@@ -369,7 +372,7 @@ button,input,select,textarea{font-family:inherit}
         <div class="switch-row" style="padding-top:0">
           <div>
             <div style="font-size:14px;font-weight:500">البحث في قاعدة بيانات عالمية</div>
-            <span class="form-hint" style="margin-top:3px">الباركود ما فيه إلا الرقم — لا اسم ولا وصف. عند مسح منتج غير موجود في مخزونك، يجلب التطبيق اسمه وماركته وصورته من <b>الكتالوج الوطني السعودي</b> أولاً (المنتجات المسجّلة بالسعودية)، وإن لم يجده فمن قواعد <b>Open Facts</b> المجانية الأربع. يحتاج إنترنت، ويُرسل <b>رقم الباركود فقط</b> — لا شيء من بيانات مستودعك.</span>
+            <span class="form-hint" style="margin-top:3px">الباركود ما فيه إلا الرقم — لا اسم ولا وصف. عند مسح منتج غير موجود في مخزونك، يجلب التطبيق اسمه وماركته وصورته من <b>الكتالوج الوطني السعودي</b> أولاً (المنتجات المسجّلة بالسعودية)، وإن لم يجده فمن قواعد <b>Open Facts</b> المجانية الأربع. يحتاج إنترنت، ويُرسل <b>رقم الباركود فقط</b> — لا شيء من بيانات مستودعك. ويُعبّأ <b>الاسم</b> في النموذج فقط — أما الملاحظات فتبقى فارغة تكتبها بنفسك.</span>
           </div>
           <label class="switch">
             <input type="checkbox" id="lookup-toggle">
@@ -579,7 +582,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.7.1';
+var APP_VERSION = '2.7.2';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -602,16 +605,27 @@ var IMG_QUALITY = 0.72;
    covers what a warehouse actually photographs: the front, the back, the
    label, the expiry stamp, the shelf, the carton. */
 var MAX_IMAGES = 6;
-/* Quantity units. Gram and kilo are weighed, so their amounts are decimal and
-   their +/- buttons cannot step by 1 — a hundred taps to add 100 g is not a
-   control, it is a punishment. `decimals` is also the rounding the stored
-   number is held to, so 2.5 kg stays 2.5 kg and never 2.4999999. */
+/* Quantity units. Kilos are weighed, so their amounts are decimal and the
+   +/- buttons cannot step by 1 — a hundred taps to add 100 g is not a control,
+   it is a punishment. `decimals` is also the rounding the stored number is held
+   to, so 2.5 kg stays 2.5 kg and never 2.4999999.
+   ONE name per unit, and it is English: the user asked for the Arabic names
+   (حبة / كرتون / كيلو) to go everywhere — the picker included — and the printed
+   reports are English-only anyway. So there is no `label`/`en` pair left to
+   drift apart; `label` is both what the app shows and what the reports print. */
 var UNITS = [
-  { id: 'piece',  label: 'حبة',   step: 1,   decimals: 0 },
-  { id: 'carton', label: 'كرتون', step: 1,   decimals: 0 },
-  { id: 'gram',   label: 'قرام',  step: 100, decimals: 0 },
-  { id: 'kilo',   label: 'كيلو',  step: 1,   decimals: 2 }
+  { id: 'piece',  label: 'Each', step: 1, decimals: 0 },
+  { id: 'carton', label: 'pct',  step: 1, decimals: 0 },
+  { id: 'kilo',   label: 'kg',   step: 1, decimals: 2 }
 ];
+/* "قرام" was retired and folded into the kilo — 500 g is now written 0.5 kg.
+   This definition is NOT offered in the unit picker; it exists so a row that
+   still says gram (written before the merge, not yet converted) keeps reading
+   correctly instead of silently falling back to "piece". migrateGramToKilo()
+   below is what actually converts such rows. */
+var RETIRED_UNITS = {
+  gram: { id: 'gram', label: 'g', step: 100, decimals: 0 }
+};
 /* Records written before units existed have no `unit` field. They were counted
    in pieces, so that is what they read back as — no migration pass needed. */
 var DEFAULT_UNIT = 'piece';
@@ -709,6 +723,51 @@ function migrateProductLocations() {
     })).then(function () { return stale.length; });
   });
 }
+
+/* ===================== Gram → kilo merge =====================
+   "قرام" was retired: a weighed amount is now written in kilos, so 500 g is
+   stored as 0.5. Existing rows have to follow, or they would read as the wrong
+   unit — the quantity would survive but 500 would start meaning 500 pieces.
+
+   Two guards, both deliberate:
+     - the amount is divided by 1000, never re-entered by hand;
+     - a value that rounds to zero is lifted to the smallest amount a kilo can
+       hold (0.01) instead of becoming 0 — a quantity of 0 means "off the shelf"
+       and would silently move the product to the archive.
+
+   Writes a history entry per row, because the number the user sees does change
+   and the log is the only place that explains why. */
+function migrateGramToKilo() {
+  return getAllProducts().then(function (products) {
+    var stale = products.filter(function (p) { return p.unit === 'gram'; });
+    if (!stale.length) return 0;
+
+    var MIN_KG = Math.pow(10, -unitInfo('kilo').decimals);   /* 0.01 */
+    var jobs = [];
+    var clamped = 0;
+
+    stale.forEach(function (p) {
+      var before = Number(p.quantity) || 0;
+      var after = roundQty(before / 1000, unitInfo('kilo').decimals);
+      if (after < MIN_KG) { after = MIN_KG; clamped++; }
+      p.unit = 'kilo';
+      p.quantity = after;
+      jobs.push(putProduct(p).then(function () {
+        return addHistory({
+          productId: p.id,
+          action: 'دمج القرام في الكيلو',
+          oldQty: before,
+          newQty: after,
+          timestamp: Date.now()
+        });
+      }));
+    });
+
+    return Promise.all(jobs).then(function () {
+      return { rows: stale.length, clamped: clamped };
+    });
+  });
+}
 var isStandalone = false;
 var swReady = false;
 
@@ -785,11 +844,19 @@ function plural(n, one, two, many) {
 /* ===================== Units ===================== */
 function unitInfo(id) {
   for (var i = 0; i < UNITS.length; i++) if (UNITS[i].id === id) return UNITS[i];
+  /* A retired unit still resolves, so a row that has not been converted yet
+     reads as what it actually is instead of quietly becoming "piece". */
+  if (Object.prototype.hasOwnProperty.call(RETIRED_UNITS, id)) return RETIRED_UNITS[id];
   return UNITS[0];
 }
 
 /* A record with no unit predates units entirely — it was counted in pieces. */
 function unitOf(product) { return (product && product.unit) || DEFAULT_UNIT; }
+
+/* The unit label used by every export. It is the same name the app shows —
+   there is only one per unit, so a printed report cannot disagree with the
+   screen it was exported from. */
+function unitLabelEn(id) { return unitInfo(id).label || id; }
 
 function roundQty(value, decimals) {
   var f = Math.pow(10, decimals);
@@ -809,7 +876,9 @@ function formatAmount(value, unitId) {
   return u.decimals ? trimZeros(n.toFixed(u.decimals)) : String(Math.round(n));
 }
 
-/* Amount and unit together — "12 حبة", "2.5 كيلو". */
+/* Amount and unit together — "12 Each", "2.5 kg". Used inside Arabic sentences
+   (history lines, the step hint), where the RTL base direction already places
+   the number before the unit in reading order, so no isolation is needed. */
 function formatQty(value, unitId) {
   return formatAmount(value, unitId) + ' ' + unitInfo(unitId).label;
 }
@@ -857,21 +926,25 @@ function isArchived(product) {
 function activeOf(list) { return list.filter(function (p) { return !isArchived(p); }); }
 function archivedOf(list) { return list.filter(isArchived); }
 
+/* `label` is Arabic and drives the app UI; `en` is the English equivalent used
+   by the exports, which must contain no Arabic at all. `level` is the stable
+   machine-readable key — match on it, never on `label`, so the report styling
+   cannot break when wording changes. */
 function getProductStatus(expiryDate, product) {
   if (product && isArchived(product)) {
-    return { label: 'في الأرشيف', cls: 'status-archived', daysLeft: 0, level: 'archived' };
+    return { label: 'في الأرشيف', en: 'Archived', cls: 'status-archived', daysLeft: 0, level: 'archived' };
   }
   /* Only reachable for a product that was put back on the shelf and has not
      been given a new date yet — archiving is what clears them. */
   if (!parseDateOnly(expiryDate)) {
-    return { label: 'بلا تاريخ انتهاء', cls: 'status-none', daysLeft: 0, level: 'none' };
+    return { label: 'بلا تاريخ انتهاء', en: 'No expiry date', cls: 'status-none', daysLeft: 0, level: 'none' };
   }
   var daysLeft = daysUntil(expiryDate);
   var warningDays = getWarningDays();
-  if (daysLeft < 0) return { label: 'منتهي', cls: 'status-expired', daysLeft: daysLeft, level: 'expired' };
-  if (daysLeft === 0) return { label: 'ينتهي اليوم', cls: 'status-warning', daysLeft: daysLeft, level: 'warning' };
-  if (daysLeft <= warningDays) return { label: 'قريب الانتهاء', cls: 'status-warning', daysLeft: daysLeft, level: 'warning' };
-  return { label: 'صالح', cls: 'status-valid', daysLeft: daysLeft, level: 'valid' };
+  if (daysLeft < 0) return { label: 'منتهي', en: 'Expired', cls: 'status-expired', daysLeft: daysLeft, level: 'expired' };
+  if (daysLeft === 0) return { label: 'ينتهي اليوم', en: 'Expires today', cls: 'status-warning', daysLeft: daysLeft, level: 'warning' };
+  if (daysLeft <= warningDays) return { label: 'قريب الانتهاء', en: 'Expiring soon', cls: 'status-warning', daysLeft: daysLeft, level: 'warning' };
+  return { label: 'صالح', en: 'Valid', cls: 'status-valid', daysLeft: daysLeft, level: 'valid' };
 }
 
 /* Runs after a quantity change has been written. Decides whether the product
@@ -1481,11 +1554,18 @@ function photoThumbHTML(src, index, opts) {
     '>' + inner + '</div>';
 }
 
-/* The amount and its unit read as one value — "2.5 كيلو" — so the unit is set
-   smaller inside the big number rather than beside it at the same weight. */
+/* The amount and its unit read as one value — "2.5 kg" — so the unit is set
+   smaller inside the big number rather than beside it at the same weight.
+   The wrapper is pinned LTR on purpose, and the reason is the SPACING, not the
+   order: `.qty-unit` spaces itself with `margin-inline-start`, and in this RTL
+   app that resolves to the unit's outer (right) edge — so "2.5" and "kg" end up
+   jammed together with a stray 5 px on the far side. Isolating the pair to LTR
+   puts the margin where it belongs, between the amount and its unit. (The
+   characters stay in order either way: with no space between them both runs sit
+   at the same bidi level, so nothing swaps. Measured, not assumed.) */
 function qtyDisplayHTML(value, unitId) {
-  return esc(formatAmount(value, unitId)) +
-    '<span class="qty-unit">' + esc(unitInfo(unitId).label) + '</span>';
+  return '<span class="qty-value" dir="ltr">' + esc(formatAmount(value, unitId)) +
+    '<span class="qty-unit">' + esc(unitInfo(unitId).label) + '</span></span>';
 }
 
 /* ===================== Details =====================
@@ -1764,8 +1844,8 @@ function renderFormPhotos() {
     : 'وصلت للحد الأقصى (' + MAX_IMAGES + ' صور)';
 }
 
-/* The amount field follows the unit: grams and kilos take decimals, pieces and
-   cartons do not, and the phone keyboard should match whichever is in use. */
+/* The amount field follows the unit: kilos take decimals, pieces and cartons do
+   not, and the phone keyboard should match whichever is in use. */
 function applyUnitToForm() {
   var u = unitInfo($('product-unit').value);
   var input = $('product-quantity');
@@ -1963,7 +2043,7 @@ function checkBarcodeConflict(barcode) {
   });
 }
 
-/* What changed, in the unit the product is counted in — "الكمية 4 ← 6 كيلو"
+/* What changed, in the unit the product is counted in — "الكمية 4 ← 6 kg"
    rather than a bare pair of numbers that could be anything. */
 function logEditHistory(oldP, newP) {
   var changes = [];
@@ -2844,12 +2924,8 @@ function fillFormFromLookup(code) {
       return;
     }
     if (!$('product-name').value.trim()) $('product-name').value = info.name;
-    if (!$('product-notes').value.trim()) {
-      var bits = [];
-      if (info.brand) bits.push(info.brand);
-      if (info.quantity) bits.push(info.quantity);
-      if (bits.length) $('product-notes').value = bits.join(' · ');
-    }
+    /* Notes are deliberately left empty. They are the user's own field, and
+       auto-filling them with the looked-up brand/quantity only got in the way. */
     $('barcode-hint').textContent = 'تمت القراءة · الاسم من قاعدة عالمية';
     applyLookupImage(info.image);
   }).catch(function () {
@@ -2883,24 +2959,52 @@ function downloadBlob(blob, filename) {
   }, 1500);
 }
 
+/* ===== Reports (PDF / Excel / CSV) =====
+   All three exports share one column list and one row builder, so they can
+   never drift apart. They are English-only by request — no Arabic string may
+   appear in any of them. The "Frozen" column was removed on request. */
+var REPORT_HEADERS = ['Product', 'Qty', 'Unit', 'Entry Date', 'Expiry Date',
+  'Days Left', 'Status', 'Barcode', 'Location', 'Notes'];
+
+/* `cells` lines up with REPORT_HEADERS; `style` is the row highlight, matching
+   the app's own colouring (expired = red fill, inside the warning window =
+   red text). `daysLeft > 0` deliberately keeps "Expires today" out of the red
+   text, which is how the app has always treated it. */
+function reportRow(p) {
+  var st = getProductStatus(p.expiryDate, p);
+  var unit = unitOf(p);
+  var style = st.daysLeft < 0
+    ? 'background:#fde8e8;color:#c0392b;'
+    : ((st.level === 'warning' && st.daysLeft > 0) ? 'color:#c0392b;font-weight:600;' : '');
+  return {
+    style: style,
+    cells: [
+      p.name || '',
+      formatAmount(p.quantity, unit),
+      unitLabelEn(unit),
+      p.entryDate || '',
+      p.expiryDate || '',
+      st.daysLeft,
+      st.en,
+      p.barcode || '',
+      p.location || '',
+      p.notes || ''
+    ]
+  };
+}
+
 function exportToCSV() {
   return getAllProducts().then(function (all) {
     /* A report is about what is on the shelf. Zero-quantity rows live in the
        archive tab and would only pad the sheet with dead stock. */
     var products = activeOf(all);
     if (!products.length) { showToast('لا توجد بيانات للتصدير'); return; }
-    var rows = [['اسم المنتج', 'الكمية', 'الوحدة', 'تاريخ الدخول', 'تاريخ الانتهاء', 'الأيام المتبقية', 'الحالة', 'الباركود', 'مجمّد', 'المكان', 'الملاحظات']];
-    sortProducts(products).forEach(function (p) {
-      var st = getProductStatus(p.expiryDate, p);
-      var unit = unitOf(p);
-      rows.push([
-        p.name, formatAmount(p.quantity, unit), unitInfo(unit).label,
-        p.entryDate, p.expiryDate,
-        st.daysLeft, st.label, p.barcode || '', p.frozen ? 'نعم' : '', p.location || '', p.notes || ''
-      ]);
-    });
+    var rows = [REPORT_HEADERS].concat(sortProducts(products).map(function (p) {
+      return reportRow(p).cells;
+    }));
     var csv = rows.map(function (r) { return r.map(csvCell).join(','); }).join('\r\n');
-    /* The BOM is what makes Excel on Windows read the Arabic correctly */
+    /* The BOM keeps Excel on Windows reading the file as UTF-8, so product
+       names typed in Arabic still survive the round trip. */
     var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     downloadBlob(blob, 'warehouse_' + todayISO() + '.csv');
     showToast('تم تصدير ' + products.length + ' منتج');
@@ -2910,7 +3014,7 @@ function exportToCSV() {
 /* ===== XLSX export ===== */
 /* Generates an HTML-table .xls file — universally compatible with Excel,
    Numbers, and LibreOffice. Excel opens it seamlessly and applies the
-   inline styles (blue header, red text for "قريب الانتهاء"). */
+   inline styles (blue header, red text for rows in the warning window). */
 function exportToXLSX() {
   return getAllProducts().then(function (all) {
     var products = activeOf(all);
@@ -2918,44 +3022,22 @@ function exportToXLSX() {
 
     var sorted = sortProducts(products);
 
-    var headerCells = ['اسم المنتج', 'الكمية', 'الوحدة', 'تاريخ الدخول', 'تاريخ الانتهاء',
-      'الأيام المتبقية', 'الحالة', 'الباركود', 'مجمّد', 'المكان', 'الملاحظات'];
-
     var headerHTML = '<tr style="background:#3E5F90;color:#fff;font-weight:bold;font-size:11pt;">' +
-      headerCells.map(function (h) {
+      REPORT_HEADERS.map(function (h) {
         return '<td style="border:1pt solid #3E5F90;padding:4px 8px;">' + esc(h) + '</td>';
       }).join('') + '</tr>';
 
     var dataHTML = sorted.map(function (p) {
-      var st = getProductStatus(p.expiryDate);
-      var unit = unitOf(p);
-      var isWarn = (st.label === 'قريب الانتهاء');
-      var isExpired = st.daysLeft < 0;
-      var rowStyle = isExpired
-        ? 'background:#fde8e8;color:#c0392b;'
-        : (isWarn ? 'color:#c0392b;font-weight:600;' : '');
-      var vals = [
-        p.name || '',
-        formatAmount(p.quantity, unit),
-        unitInfo(unit).label,
-        p.entryDate || '',
-        p.expiryDate || '',
-        st.daysLeft,
-        st.label,
-        p.barcode || '',
-        p.frozen ? '❄️' : '',
-        p.location || '',
-        p.notes || ''
-      ];
-      return '<tr style="' + rowStyle + '">' +
-        vals.map(function (v) {
+      var row = reportRow(p);
+      return '<tr style="' + row.style + '">' +
+        row.cells.map(function (v) {
           return '<td style="border:1pt solid #ccc;padding:3px 8px;font-size:10pt;">' + esc(String(v)) + '</td>';
         }).join('') + '</tr>';
     }).join('');
 
     var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
       '<head><meta charset="UTF-8"><style>td{mso-number-format:"\\@";}</style></head>' +
-      '<body dir="rtl"><table>' + headerHTML + dataHTML + '</table></body></html>';
+      '<body dir="ltr"><table>' + headerHTML + dataHTML + '</table></body></html>';
 
     var blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     downloadBlob(blob, 'warehouse_' + todayISO() + '.xls');
@@ -2966,7 +3048,7 @@ function exportToXLSX() {
 /* ===== PDF export ===== */
 /* Generates a PDF via a hidden iframe + browser print, so it works
    on iPhone without opening a new tab (which breaks inside a PWA).
-   The red colour on "قريب الانتهاء" rows is applied via inline styles. */
+   The document is English/LTR — not one Arabic string is emitted. */
 function exportToPDF() {
   return getAllProducts().then(function (all) {
     var products = activeOf(all);
@@ -2975,34 +3057,19 @@ function exportToPDF() {
     var sorted = sortProducts(products);
 
     var rows = sorted.map(function (p) {
-      var st = getProductStatus(p.expiryDate, p);
-      var unit = unitOf(p);
-      var isWarn = (st.label === 'قريب الانتهاء');
-      var isExpired = st.daysLeft < 0;
-      var rowStyle = isExpired
-        ? 'background:#fde8e8;color:#c0392b;'
-        : (isWarn ? 'color:#c0392b;font-weight:600;' : '');
-      var cells = [
-        p.name || '',
-        formatAmount(p.quantity, unit),
-        unitInfo(unit).label,
-        p.entryDate || '',
-        p.expiryDate || '',
-        st.daysLeft,
-        st.label,
-        p.barcode || '',
-        p.frozen ? '❄️' : '',
-        p.location || '',
-        p.notes || ''
-      ];
-      return '<tr style="' + rowStyle + '">' +
-        cells.map(function (v) {
+      var row = reportRow(p);
+      return '<tr style="' + row.style + '">' +
+        row.cells.map(function (v) {
           return '<td>' + esc(String(v)) + '</td>';
         }).join('') + '</tr>';
     }).join('');
 
-    var html = '<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">' +
-      '<title>سجل المستودع ' + todayISO() + '</title>' +
+    var headCells = REPORT_HEADERS.map(function (h) {
+      return '<th>' + esc(h) + '</th>';
+    }).join('');
+
+    var html = '<!DOCTYPE html><html dir="ltr" lang="en"><head><meta charset="UTF-8">' +
+      '<title>Warehouse Log ' + todayISO() + '</title>' +
       '<style>' +
       '@page{size:A4 portrait;margin:12mm;}' +
       'body{font-family:Arial,sans-serif;font-size:7pt;margin:0;padding:0;color:#181C1F;}' +
@@ -3011,12 +3078,8 @@ function exportToPDF() {
       'th{background:#3E5F90;color:#fff;font-weight:bold;font-size:6.5pt;padding:3px 2px;border:0.5pt solid #3E5F90;}' +
       'td{font-size:6.5pt;padding:2px 2px;border:0.5pt solid #ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
       '</style></head><body>' +
-      '<h1>سجل المستودع — ' + todayISO() + '</h1>' +
-      '<table><thead><tr>' +
-      '<th>اسم المنتج</th><th>الكمية</th><th>الوحدة</th><th>تاريخ الدخول</th>' +
-      '<th>تاريخ الانتهاء</th><th>الأيام المتبقية</th><th>الحالة</th>' +
-      '<th>الباركود</th><th>مجمّد</th><th>المكان</th><th>الملاحظات</th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<h1>Warehouse Log — ' + todayISO() + '</h1>' +
+      '<table><thead><tr>' + headCells + '</tr></thead><tbody>' + rows + '</tbody></table>' +
       '</body></html>';
 
     /* Use a hidden iframe instead of window.open — this works inside
@@ -3541,10 +3604,7 @@ var ACTIONS = {
     }
     if (info && info.found) {
       $('product-name').value = info.name || '';
-      var bits = [];
-      if (info.brand) bits.push(info.brand);
-      if (info.quantity) bits.push(info.quantity);
-      if (bits.length) $('product-notes').value = bits.join(' · ');
+      /* Notes stay empty on purpose — see fillFormFromLookup. */
       $('barcode-hint').textContent = 'تمت القراءة · الاسم من قاعدة عالمية';
       applyLookupImage(info.image);
     }
@@ -3712,7 +3772,7 @@ function wireUp() {
   $('product-expiry-date').addEventListener('change', updateExpiryHint);
   $('product-entry-date').addEventListener('change', updateExpiryHint);
 
-  /* Switching from "حبة" to "كيلو" has to move the field with it: the step and
+  /* Switching from "Each" to "kg" has to move the field with it: the step and
      the keyboard change, and an amount that no longer makes sense as a whole
      number (12 pieces, now kilos) is rounded to the new precision rather than
      silently stored as 12.00 kg. */
@@ -3906,6 +3966,18 @@ function init() {
     /* One-off: product rows still filed under an old location name. Resolves
        to 0 and writes nothing when there is nothing to rename. */
     return migrateProductLocations();
+  }).then(function () {
+    /* One-off: rows still counted in grams become kilos. An already-converted
+       device resolves to 0 and writes nothing. */
+    return migrateGramToKilo();
+  }).then(function (merged) {
+    /* Speak up only when something really changed — for those products the
+       amount the user reads has just moved (500 → 0.5). */
+    if (merged && merged.rows) {
+      showToast('حُوّل ' + merged.rows + ' منتج من القرام إلى الكيلو' +
+                (merged.clamped ? ' (راجع ' + merged.clamped + ' كمية صغيرة)' : ''));
+    }
+    return null;
   }).then(function () {
     return renderProducts();
   }).then(function () {
