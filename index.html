@@ -582,7 +582,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.7.3';
+var APP_VERSION = '2.8.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -3335,28 +3335,291 @@ function exportToXLSX() {
   });
 }
 
-/* ===== PDF export ===== */
-/* Generates a PDF via a hidden iframe + browser print, so it works
-   on iPhone without opening a new tab (which breaks inside a PWA).
-   The document is English/LTR — not one Arabic string is emitted.
+/* ===== PDF export =====
+   A PDF built here, in the app, as a finished file.
 
-   The browser draws its own header and footer — the date, the page title and
-   the site URL — inside the page margin, which is why the URL kept appearing
-   on the printed sheet. At zero page margin there is no room left to draw
-   them in, so Chromium prints neither, and the "Headers and footers" switch
-   in the print dialog stops changing this document at all.
+   The previous version generated HTML and handed it to the browser's print
+   dialog, then relied on `@page{margin:0}` to squeeze out the header/footer
+   the browser draws inside the page margin. That works on desktop Chromium —
+   but it can never work on iPhone: iOS renders "Print to PDF" through the
+   system print sheet (UIPrintInteractionController), which draws the page URL
+   and date in a layer outside the web page. No CSS and no JavaScript can
+   reach it, and Apple exposes no switch. So the URL came back on every
+   iPhone print.
 
-   The margins are then rebuilt in CSS, because the sheet still needs them:
-   `body` supplies the left and right, the repeated `thead` supplies the top
-   of every page, and the `tfoot` spacer supplies the bottom — the last two
-   matter because a page margin cannot be faked by padding a body that only
-   has one top and one bottom. */
+   The fix is to stop using the print pipeline at all. The report is laid out
+   here and written as a PDF byte stream, then handed to the platform as a
+   finished file. Nothing is printed, so no header, footer, URL or page number
+   can be added — there is no print pipeline left to add them.
 
-/* Column widths as percentages of the printable width, one per
-   REPORT_HEADERS entry. `table-layout:fixed` distributes columns evenly when
-   nothing says otherwise, which leaves "Notes" as wide as "Product" and
-   pushes the product names into ellipses. */
-var PDF_COL_WIDTHS = [21, 6.5, 5.5, 10, 10, 7, 10, 10.5, 9.5, 10];
+   Why the page is drawn to a canvas rather than written as PDF text:
+   product names, storage locations and notes are typed in Arabic. The PDF
+   standard's built-in fonts (Helvetica and friends) cannot encode Arabic, and
+   embedding a font is not an option — the app ships no font file, and the
+   ones on the device are licensed and must not be redistributed inside a
+   document the user emails to a supplier. Drawing through a canvas lets the
+   browser's own text engine shape the Arabic correctly, and the result is
+   embedded as a JPEG using the PDF's /DCTDecode filter, which passes the
+   bytes through untouched.
+
+   The trade-off, stated plainly: the PDF's text is not selectable or
+   searchable, because it is an image. The .xlsx and .csv exports keep real
+   text, so those are the right format when the data must be re-used rather
+   than read. Nothing is fetched — the app still works offline. */
+
+/* Rendered at this multiple of the A4 point size, so the page image is
+   1191x1684 px — about 144 dpi. Measured, not guessed: scale 2 at JPEG
+   quality 0.8 stays legible for 7pt body text while producing roughly a third
+   less data than scale 3, which matters because the file is emailed. */
+var PDF_SCALE = 2;
+var PDF_PAGE_W = 595.28;
+var PDF_PAGE_H = 841.89;
+var PDF_MARGIN_X = 28;
+var PDF_MARGIN_TOP = 34;
+var PDF_MARGIN_BOTTOM = 30;
+var PDF_ROW_H = 13;
+var PDF_HEAD_H = 17;
+var PDF_TITLE_H = 26;
+var PDF_FONT = 'Helvetica, Arial, sans-serif';
+var PDF_FONT_SIZE = 7;
+var PDF_TITLE_FONT_SIZE = 13;
+
+/* Column widths as points, one per REPORT_HEADERS entry. Proportional to the
+   old HTML report's percentages so the two look the same side by side. The
+   last column absorbs the rounding so the table always ends exactly at the
+   right margin. */
+var PDF_COL_WIDTHS = (function () {
+  var pct = [21, 6.5, 5.5, 10, 10, 7, 10, 10.5, 9.5, 10];
+  var usable = PDF_PAGE_W - PDF_MARGIN_X * 2;
+  var widths = pct.map(function (p) { return (usable * p) / 100; });
+  var sum = widths.reduce(function (a, b) { return a + b; }, 0);
+  widths[widths.length - 1] += usable - sum;
+  return widths;
+})();
+
+var PDF_HEADER_FILL = '#3E5F90';
+var PDF_ROW_FILL = '#FDE8E8';
+var PDF_RULE = '#DDDDDD';
+var PDF_TEXT = '#181C1F';
+var PDF_RED = '#C0392B';
+
+/* A cell's text is written with the app's own fonts and direction, so an
+   Arabic name is shaped and ordered by the browser exactly as on screen. */
+function pdfDrawText(ctx, text, x, y, maxWidth, opts) {
+  var o = opts || {};
+  ctx.save();
+  ctx.font = (o.bold ? 'bold ' : '') + (o.size || PDF_FONT_SIZE) + 'px ' + PDF_FONT;
+  ctx.fillStyle = o.color || PDF_TEXT;
+  ctx.textBaseline = 'middle';
+  var s = String(text === null || text === undefined ? '' : text);
+  /* Clip instead of ellipsising: a truncated Arabic string loses its meaning,
+     and the columns are sized so real names fit. */
+  ctx.beginPath();
+  ctx.rect(x, y - PDF_ROW_H / 2, Math.max(1, maxWidth), PDF_ROW_H);
+  ctx.clip();
+  ctx.direction = /[\u0600-\u06FF]/.test(s) ? 'rtl' : 'ltr';
+  ctx.textAlign = ctx.direction === 'rtl' ? 'right' : 'left';
+  ctx.fillText(s, ctx.direction === 'rtl' ? x + maxWidth : x, y);
+  ctx.restore();
+}
+
+/* Lays the whole report out over one or more canvases and returns JPEG bytes
+   per page. Pagination happens here, so the PDF writer only has to place
+   images — it never has to reason about text metrics. */
+function pdfRenderPages(sorted) {
+  var pages = [];
+  var colX = [];
+  var x = PDF_MARGIN_X;
+  PDF_COL_WIDTHS.forEach(function (w) { colX.push(x); x += w; });
+  var tableW = PDF_PAGE_W - PDF_MARGIN_X * 2;
+
+  var scale = PDF_SCALE;
+  var canvas = document.createElement('canvas');
+  canvas.width = Math.round(PDF_PAGE_W * scale);
+  canvas.height = Math.round(PDF_PAGE_H * scale);
+  var ctx = canvas.getContext('2d');
+
+  /* Everything below works in PDF points; the context is scaled once so the
+     drawing code can use the same numbers as the layout. */
+  function beginPage(withTitle) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    var y = PDF_MARGIN_TOP;
+    if (withTitle) {
+      ctx.fillStyle = PDF_TEXT;
+      ctx.font = 'bold ' + PDF_TITLE_FONT_SIZE + 'px ' + PDF_FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Warehouse Log \u2014 ' + todayISO(), PDF_PAGE_W / 2, y + 6);
+      y += PDF_TITLE_H;
+    }
+    /* Header row. */
+    ctx.fillStyle = PDF_HEADER_FILL;
+    ctx.fillRect(PDF_MARGIN_X, y, tableW, PDF_HEAD_H);
+    var hy = y + PDF_HEAD_H / 2;
+    REPORT_HEADERS.forEach(function (h, i) {
+      pdfDrawText(ctx, h, colX[i] + 3, hy, PDF_COL_WIDTHS[i] - 6,
+        { bold: true, color: '#FFFFFF', size: PDF_FONT_SIZE });
+    });
+    return y + PDF_HEAD_H;
+  }
+
+  function endPage() {
+    var footerY = PDF_PAGE_H - PDF_MARGIN_BOTTOM + 14;
+    ctx.fillStyle = '#808080';
+    ctx.font = '6.5px ' + PDF_FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Page ' + (pages.length + 1) + '  \u00B7  ' + todayISO(),
+      PDF_PAGE_W / 2, footerY);
+  }
+
+  var y = beginPage(true);
+
+  sorted.forEach(function (p) {
+    var row = reportRow(p);
+    if (y + PDF_ROW_H > PDF_PAGE_H - PDF_MARGIN_BOTTOM) {
+      endPage();
+      pages.push(canvas.toDataURL('image/jpeg', 0.8));
+      y = beginPage(false);
+    }
+    if (row.kind === 'expired') {
+      ctx.fillStyle = PDF_ROW_FILL;
+      ctx.fillRect(PDF_MARGIN_X, y, tableW, PDF_ROW_H);
+    }
+    var color = (row.kind === 'expired' || row.kind === 'warning')
+      ? PDF_RED : PDF_TEXT;
+    var bold = row.kind === 'warning';
+    var ty = y + PDF_ROW_H / 2;
+    row.cells.forEach(function (v, i) {
+      pdfDrawText(ctx, v, colX[i] + 3, ty, PDF_COL_WIDTHS[i] - 6,
+        { color: color, bold: bold });
+    });
+    ctx.fillStyle = PDF_RULE;
+    ctx.fillRect(PDF_MARGIN_X, y + PDF_ROW_H - 0.4, tableW, 0.4);
+    y += PDF_ROW_H;
+  });
+
+  endPage();
+  pages.push(canvas.toDataURL('image/jpeg', 0.8));
+  return pages;
+}
+
+/* ---- The PDF writer ----
+   A PDF is a header, a body of numbered objects, and a cross-reference table
+   saying where each object starts. Every page carries one full-bleed image,
+   so the writer never deals with text or fonts — only images and page boxes. */
+function pdfBase64ToBytes(base64) {
+  var binary = atob(base64);
+  var bytes = new Uint8Array(binary.length);
+  for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function buildWarehousePDF(sorted) {
+  var dataUrls = pdfRenderPages(sorted);
+  var jpegs = dataUrls.map(function (u) { return pdfBase64ToBytes(u.split(',')[1]); });
+
+  /* Objects: 1 catalog, 2 pages, 3.. each image + its content stream, then
+     the page objects. Page objects come after their image and stream so the
+     numbers are simple to compute. */
+  var objects = [];
+  var n = jpegs.length;
+  var imageIds = [];
+  var contentIds = [];
+  var firstImageObj = 3;
+  for (var i = 0; i < n; i++) {
+    imageIds.push(firstImageObj + i * 2);
+    contentIds.push(firstImageObj + i * 2 + 1);
+  }
+  var firstPageObj = firstImageObj + n * 2;
+  var pageIds = [];
+  for (var j = 0; j < n; j++) pageIds.push(firstPageObj + j);
+
+  var pending = [];           /* deferred raw image bodies, in object order */
+
+  objects.push('<< /Type /Catalog /Pages 2 0 R >>');
+  objects.push('<< /Type /Pages /Count ' + n + ' /Kids [' +
+    pageIds.map(function (id) { return id + ' 0 R'; }).join(' ') + '] >>');
+
+  for (var k = 0; k < n; k++) {
+    /* A page-sized image: the canvas was rendered at the page's aspect, so
+       the image covers the whole MediaBox with no scaling maths needed. */
+    var pxW = Math.round(PDF_PAGE_W * PDF_SCALE);
+    var pxH = Math.round(PDF_PAGE_H * PDF_SCALE);
+    var head = '<< /Type /XObject /Subtype /Image /Width ' + pxW +
+      ' /Height ' + pxH + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 ' +
+      '/Filter /DCTDecode /Length ' + jpegs[k].length + ' >>\nstream\n';
+    pending.push({ index: objects.length, header: head, body: jpegs[k] });
+    objects.push(null);       /* placeholder, filled below */
+    var content = 'q ' + PDF_PAGE_W.toFixed(2) + ' 0 0 ' + PDF_PAGE_H.toFixed(2) +
+      ' 0 0 cm /Im' + k + ' Do Q';
+    objects.push('<< /Length ' + content.length + ' >>\nstream\n' + content + '\nendstream');
+  }
+
+  for (var m = 0; m < n; m++) {
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' +
+      PDF_PAGE_W.toFixed(2) + ' ' + PDF_PAGE_H.toFixed(2) + '] ' +
+      '/Resources << /XObject << /Im' + m + ' ' + imageIds[m] + ' 0 R >> >> ' +
+      '/Contents ' + contentIds[m] + ' 0 R >>');
+  }
+
+  /* Serialise by hand because the image bodies are raw bytes, not text. */
+  var out = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n';
+  var offsets = [];
+  var byIndex = {};
+  pending.forEach(function (p) { byIndex[p.index] = p; });
+  for (var o = 0; o < objects.length; o++) {
+    offsets[o] = out.length;
+    if (byIndex[o]) {
+      out += (o + 1) + ' 0 obj\n' + byIndex[o].header;
+      for (var b = 0; b < byIndex[o].body.length; b++) {
+        out += String.fromCharCode(byIndex[o].body[b]);
+      }
+      out += '\nendstream\nendobj\n';
+    } else {
+      out += (o + 1) + ' 0 obj\n' + objects[o] + '\nendobj\n';
+    }
+  }
+  var xrefStart = out.length;
+  out += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+  offsets.forEach(function (off) {
+    out += String(off).padStart(10, '0') + ' 00000 n \n';
+  });
+  out += 'trailer\n<< /Size ' + (objects.length + 1) +
+    ' /Root 1 0 R >>\nstartxref\n' + xrefStart + '\n%%EOF\n';
+
+  var bytes = new Uint8Array(out.length);
+  for (var q = 0; q < out.length; q++) bytes[q] = out.charCodeAt(q) & 0xFF;
+  return new Blob([bytes], { type: 'application/pdf' });
+}
+
+/* iPhone has no "download a file" concept, so the finished PDF goes to the
+   share sheet — from which the user saves it to Files, mails it, or opens it
+   in Books. On a device with no share support it falls back to a download,
+   which is what desktop keeps using. */
+function shareOrDownloadPDF(blob, filename) {
+  var file = null;
+  try {
+    file = new File([blob], filename, { type: 'application/pdf' });
+  } catch (e) { file = null; }
+
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file], title: filename })
+      .then(function () { showToast('تم تجهيز ملف PDF'); })
+      .catch(function (err) {
+        /* The user closing the share sheet is not a failure. */
+        if (err && err.name === 'AbortError') return;
+        downloadBlob(blob, filename);
+        showToast('تم تصدير ملف PDF');
+      });
+    return;
+  }
+  downloadBlob(blob, filename);
+  showToast('تم تصدير ملف PDF');
+}
 
 function exportToPDF() {
   return getAllProducts().then(function (all) {
@@ -3364,67 +3627,17 @@ function exportToPDF() {
     if (!products.length) { showToast('لا توجد بيانات للتصدير'); return; }
 
     var sorted = sortProducts(products);
-
-    var rows = sorted.map(function (p) {
-      var row = reportRow(p);
-      return '<tr style="' + row.style + '">' +
-        row.cells.map(function (v) {
-          return '<td>' + esc(String(v)) + '</td>';
-        }).join('') + '</tr>';
-    }).join('');
-
-    var headCells = REPORT_HEADERS.map(function (h) {
-      return '<th>' + esc(h) + '</th>';
-    }).join('');
-
-    var colGroup = PDF_COL_WIDTHS.map(function (w) {
-      return '<col style="width:' + w + '%">';
-    }).join('');
-
-    var html = '<!DOCTYPE html><html dir="ltr" lang="en"><head><meta charset="UTF-8">' +
-      '<title>Warehouse Log ' + todayISO() + '</title>' +
-      '<style>' +
-      '@page{size:A4 portrait;margin:0;}' +
-      'html,body{margin:0;padding:0;}' +
-      'body{font-family:Arial,sans-serif;font-size:7pt;color:#181C1F;padding:0 12mm;}' +
-      'h1{font-size:12pt;margin:0;padding:10mm 0 0 0;text-align:center;}' +
-      'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
-      'thead{display:table-header-group;}' +
-      'thead th{background:#3E5F90;color:#fff;font-weight:bold;font-size:6.5pt;' +
-        'padding:6mm 2px 3px 2px;border:0.5pt solid #3E5F90;}' +
-      'tbody td{font-size:6.5pt;padding:2px 2px;border:0.5pt solid #ccc;' +
-        'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
-      'tfoot{display:table-footer-group;}' +
-      'tfoot td{border:0;padding:0;height:9mm;}' +
-      '</style></head><body>' +
-      '<h1>Warehouse Log — ' + todayISO() + '</h1>' +
-      '<table>' +
-      '<colgroup>' + colGroup + '</colgroup>' +
-      '<thead><tr>' + headCells + '</tr></thead>' +
-      '<tfoot><tr><td colspan="' + REPORT_HEADERS.length + '"></td></tr></tfoot>' +
-      '<tbody>' + rows + '</tbody>' +
-      '</table>' +
-      '</body></html>';
-
-    /* Use a hidden iframe instead of window.open — this works inside
-       a PWA on iPhone (no new tab needed) and in all desktop browsers. */
-    var oldFrame = document.getElementById('pdf-print-frame');
-    if (oldFrame) oldFrame.remove();
-    var frame = document.createElement('iframe');
-    frame.id = 'pdf-print-frame';
-    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
-    document.body.appendChild(frame);
-    var doc = frame.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
-    /* Give the iframe a moment to render, then trigger print */
+    /* JPEG encoding a large canvas is synchronous and can take a moment on a
+       phone, so let the toast paint before the work starts. */
+    showToast('جارٍ تجهيز ملف PDF…');
     setTimeout(function () {
-      frame.contentWindow.focus();
-      frame.contentWindow.print();
-      /* Remove the frame after print dialog closes */
-      setTimeout(function () { frame.remove(); }, 1000);
-    }, 500);
+      try {
+        var blob = buildWarehousePDF(sorted);
+        shareOrDownloadPDF(blob, 'warehouse_' + todayISO() + '.pdf');
+      } catch (err) {
+        showToast('تعذّر إنشاء ملف PDF');
+      }
+    }, 30);
   });
 }
 
