@@ -582,7 +582,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.7.2';
+var APP_VERSION = '2.7.3';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -2969,15 +2969,24 @@ var REPORT_HEADERS = ['Product', 'Qty', 'Unit', 'Entry Date', 'Expiry Date',
 /* `cells` lines up with REPORT_HEADERS; `style` is the row highlight, matching
    the app's own colouring (expired = red fill, inside the warning window =
    red text). `daysLeft > 0` deliberately keeps "Expires today" out of the red
-   text, which is how the app has always treated it. */
+   text, which is how the app has always treated it.
+
+   `kind` is the same decision in words. The HTML and print exports read the
+   CSS string; the spreadsheet cannot, because a cell carries a style *id*
+   from xl/styles.xml rather than a declaration — so both come from here and
+   the three reports can never disagree about which rows are red. */
 function reportRow(p) {
   var st = getProductStatus(p.expiryDate, p);
   var unit = unitOf(p);
-  var style = st.daysLeft < 0
+  var kind = st.daysLeft < 0
+    ? 'expired'
+    : ((st.level === 'warning' && st.daysLeft > 0) ? 'warning' : 'normal');
+  var style = kind === 'expired'
     ? 'background:#fde8e8;color:#c0392b;'
-    : ((st.level === 'warning' && st.daysLeft > 0) ? 'color:#c0392b;font-weight:600;' : '');
+    : (kind === 'warning' ? 'color:#c0392b;font-weight:600;' : '');
   return {
     style: style,
+    kind: kind,
     cells: [
       p.name || '',
       formatAmount(p.quantity, unit),
@@ -3011,36 +3020,317 @@ function exportToCSV() {
   });
 }
 
-/* ===== XLSX export ===== */
-/* Generates an HTML-table .xls file — universally compatible with Excel,
-   Numbers, and LibreOffice. Excel opens it seamlessly and applies the
-   inline styles (blue header, red text for rows in the warning window). */
+/* ===== XLSX export =====
+   A real .xlsx — an Office Open XML package — instead of an HTML table that
+   was simply renamed to .xls. The renamed table was the whole problem: Excel
+   warned that the format did not match the extension, and phone spreadsheet
+   apps rejected the file outright.
+
+   A .xlsx is a ZIP container of XML parts, so this writes the container:
+   `[Content_Types].xml`, the two relationship files, `xl/workbook.xml`,
+   `xl/styles.xml` and `xl/worksheets/sheet1.xml`.
+
+   Every part is stored uncompressed. Readers accept that, and it keeps a
+   deflate implementation out of this file — the app still has no dependency
+   and still works with the network switched off. */
+
+/* ---- CRC-32 — the ZIP format requires one per entry ---- */
+var CRC_TABLE = (function () {
+  var table = new Uint32Array(256);
+  for (var n = 0; n < 256; n++) {
+    var c = n;
+    for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  var c = 0xFFFFFFFF;
+  for (var i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/* UTF-8 by hand. Product names are Arabic and every XML part is UTF-8, so
+   this cannot be skipped — and writing it here keeps the file free of any
+   assumption about TextEncoder being present in the host WebView. */
+function utf8Bytes(str) {
+  var out = [], i, c, c2, cp;
+  for (i = 0; i < str.length; i++) {
+    c = str.charCodeAt(i);
+    if (c < 0x80) {
+      out.push(c);
+    } else if (c < 0x800) {
+      out.push(0xC0 | (c >> 6), 0x80 | (c & 63));
+    } else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) {
+      c2 = str.charCodeAt(++i);
+      cp = 0x10000 + ((c - 0xD800) << 10) + (c2 - 0xDC00);
+      out.push(0xF0 | (cp >> 18), 0x80 | ((cp >> 12) & 63),
+        0x80 | ((cp >> 6) & 63), 0x80 | (cp & 63));
+    } else {
+      out.push(0xE0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
+    }
+  }
+  return new Uint8Array(out);
+}
+
+/* STORE-only ZIP writer. `entries` is [{name, text}] and every part of an
+   .xlsx is text, so the caller never has to think in bytes. */
+function zipStore(entries) {
+  var parts = [], central = [], offset = 0;
+
+  entries.forEach(function (entry) {
+    var nameBytes = utf8Bytes(entry.name);
+    var data = utf8Bytes(entry.text);
+    var crc = crc32(data);
+
+    var local = new Uint8Array(30 + nameBytes.length);
+    var lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034B50, true);        /* local file header */
+    lv.setUint16(4, 20, true);                /* version needed */
+    lv.setUint16(6, 0x0800, true);            /* names are UTF-8 */
+    lv.setUint16(8, 0, true);                 /* method: store */
+    lv.setUint16(10, 0, true);                /* mod time */
+    lv.setUint16(12, 0x21, true);             /* mod date: 1980-01-01 */
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+
+    var dir = new Uint8Array(46 + nameBytes.length);
+    var dv = new DataView(dir.buffer);
+    dv.setUint32(0, 0x02014B50, true);        /* central directory header */
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 20, true);
+    dv.setUint16(8, 0x0800, true);
+    dv.setUint16(10, 0, true);
+    dv.setUint16(12, 0, true);
+    dv.setUint16(14, 0x21, true);
+    dv.setUint32(16, crc, true);
+    dv.setUint32(20, data.length, true);
+    dv.setUint32(24, data.length, true);
+    dv.setUint16(28, nameBytes.length, true);
+    dv.setUint16(30, 0, true);
+    dv.setUint16(32, 0, true);
+    dv.setUint16(34, 0, true);
+    dv.setUint16(36, 0, true);
+    dv.setUint32(38, 0, true);
+    dv.setUint32(42, offset, true);           /* offset of the local header */
+    dir.set(nameBytes, 46);
+
+    parts.push(local, data);
+    central.push(dir);
+    offset += local.length + data.length;
+  });
+
+  var centralSize = central.reduce(function (sum, part) { return sum + part.length; }, 0);
+  var end = new Uint8Array(22);
+  var ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054B50, true);          /* end of central directory */
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, entries.length, true);
+  ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+
+  return new Blob(parts.concat(central, [end]), {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
+/* ---- XML text ---- */
+/* Control characters are not legal in XML 1.0, and one of them arriving from
+   a pasted product name would make the whole workbook unreadable rather than
+   just that cell. They are dropped rather than escaped, because XML has no
+   escape for them. */
+function xmlText(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
+/* 0 -> A, 25 -> Z, 26 -> AA */
+function columnName(index) {
+  var name = '';
+  index = index + 1;
+  while (index > 0) {
+    name = String.fromCharCode(65 + ((index - 1) % 26)) + name;
+    index = Math.floor((index - 1) / 26);
+  }
+  return name;
+}
+
+/* Column widths in Excel's character units, one per REPORT_HEADERS entry.
+   Without them Excel uses one uniform width and the product names — the
+   longest and most important column — are the first thing cut off. */
+var REPORT_COL_WIDTHS = [30, 8, 8, 13, 13, 10, 15, 16, 18, 24];
+
+/* Style ids, in the order they are declared in xl/styles.xml below. */
+var XLSX_HEADER_STYLE = 1;
+var XLSX_TEXT_STYLE = 2;
+var XLSX_NUMBER_STYLE = 3;
+var XLSX_WARN_TEXT_STYLE = 4;
+var XLSX_WARN_NUMBER_STYLE = 5;
+var XLSX_EXPIRED_TEXT_STYLE = 6;
+var XLSX_EXPIRED_NUMBER_STYLE = 7;
+
+/* Only these two columns are written as real numbers, so Excel can sum and
+   sort them. Every other column stays text: a barcode of "62210311000"
+   written as a number would become 6.22103E+13 and lose the digits that
+   make it a barcode. */
+var XLSX_NUMERIC_COLS = [1, 5];
+var XLSX_NUMBER_RE = /^-?\d+(?:\.\d+)?$/;
+
+function xlsxStylesXml() {
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="4">' +
+      '<font><sz val="10"/><name val="Calibri"/></font>' +
+      '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>' +
+      '<font><sz val="10"/><color rgb="FFC0392B"/><name val="Calibri"/></font>' +
+      '<font><b/><sz val="10"/><color rgb="FFC0392B"/><name val="Calibri"/></font>' +
+    '</fonts>' +
+    '<fills count="4">' +
+      '<fill><patternFill patternType="none"/></fill>' +
+      '<fill><patternFill patternType="gray125"/></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF3E5F90"/><bgColor indexed="64"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFFDE8E8"/><bgColor indexed="64"/></patternFill></fill>' +
+    '</fills>' +
+    '<borders count="2">' +
+      '<border><left/><right/><top/><bottom/><diagonal/></border>' +
+      '<border>' +
+        '<left style="thin"><color rgb="FFBFBFBF"/></left>' +
+        '<right style="thin"><color rgb="FFBFBFBF"/></right>' +
+        '<top style="thin"><color rgb="FFBFBFBF"/></top>' +
+        '<bottom style="thin"><color rgb="FFBFBFBF"/></bottom>' +
+        '<diagonal/>' +
+      '</border>' +
+    '</borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="8">' +
+      '<xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>' +
+      '<xf numFmtId="49" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>' +
+      '<xf numFmtId="49" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyNumberFormat="1"/>' +
+      '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyNumberFormat="1"/>' +
+      '<xf numFmtId="49" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyNumberFormat="1"/>' +
+      '<xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyNumberFormat="1"/>' +
+      '<xf numFmtId="49" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1"/>' +
+      '<xf numFmtId="0" fontId="3" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyNumberFormat="1"/>' +
+    '</cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+    '</styleSheet>';
+}
+
+/* `rows` is [{cells, kind}] — the header row first, then one reportRow() per
+   product. */
+function xlsxSheetXml(rows) {
+  var body = rows.map(function (row, r) {
+    var cells = row.cells.map(function (value, c) {
+      var ref = columnName(c) + (r + 1);
+      var isNum = r > 0 && XLSX_NUMERIC_COLS.indexOf(c) !== -1 &&
+        XLSX_NUMBER_RE.test(String(value));
+      var style;
+      if (r === 0) {
+        style = XLSX_HEADER_STYLE;
+      } else if (row.kind === 'expired') {
+        style = isNum ? XLSX_EXPIRED_NUMBER_STYLE : XLSX_EXPIRED_TEXT_STYLE;
+      } else if (row.kind === 'warning') {
+        style = isNum ? XLSX_WARN_NUMBER_STYLE : XLSX_WARN_TEXT_STYLE;
+      } else {
+        style = isNum ? XLSX_NUMBER_STYLE : XLSX_TEXT_STYLE;
+      }
+      if (isNum) {
+        return '<c r="' + ref + '" s="' + style + '"><v>' + Number(value) + '</v></c>';
+      }
+      /* Inline strings keep the package to six parts — no sharedStrings.xml
+         to index, and the text sits next to the cell that shows it. */
+      return '<c r="' + ref + '" s="' + style + '" t="inlineStr"><is>' +
+        '<t xml:space="preserve">' + xmlText(value) + '</t></is></c>';
+    }).join('');
+    return '<row r="' + (r + 1) + '"' + (r === 0 ? ' ht="22" customHeight="1"' : '') + '>' +
+      cells + '</row>';
+  }).join('');
+
+  var lastCol = columnName(REPORT_HEADERS.length - 1);
+  var lastRow = rows.length;
+  var cols = REPORT_COL_WIDTHS.map(function (w, i) {
+    return '<col min="' + (i + 1) + '" max="' + (i + 1) + '" width="' + w + '" customWidth="1"/>';
+  }).join('');
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<dimension ref="A1:' + lastCol + lastRow + '"/>' +
+    '<sheetViews><sheetView tabSelected="1" workbookViewId="0">' +
+      /* Freeze the header, so the column names stay on screen while scrolling. */
+      '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>' +
+      '<selection pane="bottomLeft" activeCell="A2" sqref="A2"/>' +
+    '</sheetView></sheetViews>' +
+    '<sheetFormatPr defaultRowHeight="15"/>' +
+    '<cols>' + cols + '</cols>' +
+    '<sheetData>' + body + '</sheetData>' +
+    '<autoFilter ref="A1:' + lastCol + lastRow + '"/>' +
+    '</worksheet>';
+}
+
+function xlsxPackage(sheetXml) {
+  var nsMain = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+  var nsRel = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  var nsPkg = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  return [
+    {
+      name: '[Content_Types].xml',
+      text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+        '</Types>',
+    },
+    {
+      name: '_rels/.rels',
+      text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="' + nsPkg + '">' +
+        '<Relationship Id="rId1" Type="' + nsRel + '/officeDocument" Target="xl/workbook.xml"/>' +
+        '</Relationships>',
+    },
+    {
+      name: 'xl/workbook.xml',
+      text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<workbook xmlns="' + nsMain + '" xmlns:r="' + nsRel + '">' +
+        '<sheets><sheet name="Warehouse" sheetId="1" r:id="rId1"/></sheets>' +
+        '</workbook>',
+    },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      text: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<Relationships xmlns="' + nsPkg + '">' +
+        '<Relationship Id="rId1" Type="' + nsRel + '/worksheet" Target="worksheets/sheet1.xml"/>' +
+        '<Relationship Id="rId2" Type="' + nsRel + '/styles" Target="styles.xml"/>' +
+        '</Relationships>',
+    },
+    { name: 'xl/styles.xml', text: xlsxStylesXml() },
+    { name: 'xl/worksheets/sheet1.xml', text: sheetXml },
+  ];
+}
+
 function exportToXLSX() {
   return getAllProducts().then(function (all) {
     var products = activeOf(all);
     if (!products.length) { showToast('لا توجد بيانات للتصدير'); return; }
 
     var sorted = sortProducts(products);
+    var rows = [{ cells: REPORT_HEADERS.slice(), kind: 'header' }]
+      .concat(sorted.map(function (p) { return reportRow(p); }));
 
-    var headerHTML = '<tr style="background:#3E5F90;color:#fff;font-weight:bold;font-size:11pt;">' +
-      REPORT_HEADERS.map(function (h) {
-        return '<td style="border:1pt solid #3E5F90;padding:4px 8px;">' + esc(h) + '</td>';
-      }).join('') + '</tr>';
-
-    var dataHTML = sorted.map(function (p) {
-      var row = reportRow(p);
-      return '<tr style="' + row.style + '">' +
-        row.cells.map(function (v) {
-          return '<td style="border:1pt solid #ccc;padding:3px 8px;font-size:10pt;">' + esc(String(v)) + '</td>';
-        }).join('') + '</tr>';
-    }).join('');
-
-    var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">' +
-      '<head><meta charset="UTF-8"><style>td{mso-number-format:"\\@";}</style></head>' +
-      '<body dir="ltr"><table>' + headerHTML + dataHTML + '</table></body></html>';
-
-    var blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    downloadBlob(blob, 'warehouse_' + todayISO() + '.xls');
+    downloadBlob(zipStore(xlsxPackage(xlsxSheetXml(rows))),
+      'warehouse_' + todayISO() + '.xlsx');
     showToast('تم تصدير ' + sorted.length + ' منتج إلى Excel');
   });
 }
@@ -3048,7 +3338,26 @@ function exportToXLSX() {
 /* ===== PDF export ===== */
 /* Generates a PDF via a hidden iframe + browser print, so it works
    on iPhone without opening a new tab (which breaks inside a PWA).
-   The document is English/LTR — not one Arabic string is emitted. */
+   The document is English/LTR — not one Arabic string is emitted.
+
+   The browser draws its own header and footer — the date, the page title and
+   the site URL — inside the page margin, which is why the URL kept appearing
+   on the printed sheet. At zero page margin there is no room left to draw
+   them in, so Chromium prints neither, and the "Headers and footers" switch
+   in the print dialog stops changing this document at all.
+
+   The margins are then rebuilt in CSS, because the sheet still needs them:
+   `body` supplies the left and right, the repeated `thead` supplies the top
+   of every page, and the `tfoot` spacer supplies the bottom — the last two
+   matter because a page margin cannot be faked by padding a body that only
+   has one top and one bottom. */
+
+/* Column widths as percentages of the printable width, one per
+   REPORT_HEADERS entry. `table-layout:fixed` distributes columns evenly when
+   nothing says otherwise, which leaves "Notes" as wide as "Product" and
+   pushes the product names into ellipses. */
+var PDF_COL_WIDTHS = [21, 6.5, 5.5, 10, 10, 7, 10, 10.5, 9.5, 10];
+
 function exportToPDF() {
   return getAllProducts().then(function (all) {
     var products = activeOf(all);
@@ -3068,18 +3377,33 @@ function exportToPDF() {
       return '<th>' + esc(h) + '</th>';
     }).join('');
 
+    var colGroup = PDF_COL_WIDTHS.map(function (w) {
+      return '<col style="width:' + w + '%">';
+    }).join('');
+
     var html = '<!DOCTYPE html><html dir="ltr" lang="en"><head><meta charset="UTF-8">' +
       '<title>Warehouse Log ' + todayISO() + '</title>' +
       '<style>' +
-      '@page{size:A4 portrait;margin:12mm;}' +
-      'body{font-family:Arial,sans-serif;font-size:7pt;margin:0;padding:0;color:#181C1F;}' +
-      'h1{font-size:12pt;margin:0 0 8px 0;text-align:center;}' +
+      '@page{size:A4 portrait;margin:0;}' +
+      'html,body{margin:0;padding:0;}' +
+      'body{font-family:Arial,sans-serif;font-size:7pt;color:#181C1F;padding:0 12mm;}' +
+      'h1{font-size:12pt;margin:0;padding:10mm 0 0 0;text-align:center;}' +
       'table{width:100%;border-collapse:collapse;table-layout:fixed;}' +
-      'th{background:#3E5F90;color:#fff;font-weight:bold;font-size:6.5pt;padding:3px 2px;border:0.5pt solid #3E5F90;}' +
-      'td{font-size:6.5pt;padding:2px 2px;border:0.5pt solid #ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+      'thead{display:table-header-group;}' +
+      'thead th{background:#3E5F90;color:#fff;font-weight:bold;font-size:6.5pt;' +
+        'padding:6mm 2px 3px 2px;border:0.5pt solid #3E5F90;}' +
+      'tbody td{font-size:6.5pt;padding:2px 2px;border:0.5pt solid #ccc;' +
+        'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+      'tfoot{display:table-footer-group;}' +
+      'tfoot td{border:0;padding:0;height:9mm;}' +
       '</style></head><body>' +
       '<h1>Warehouse Log — ' + todayISO() + '</h1>' +
-      '<table><thead><tr>' + headCells + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<table>' +
+      '<colgroup>' + colGroup + '</colgroup>' +
+      '<thead><tr>' + headCells + '</tr></thead>' +
+      '<tfoot><tr><td colspan="' + REPORT_HEADERS.length + '"></td></tr></tfoot>' +
+      '<tbody>' + rows + '</tbody>' +
+      '</table>' +
       '</body></html>';
 
     /* Use a hidden iframe instead of window.open — this works inside
