@@ -1,0 +1,16 @@
+# Scratch files made while editing the app.
+#
+# index.html.before-2.9.0-articles was a hand-made backup taken before a large
+# edit. It is byte-identical to the committed build at that time, so git
+# already holds it — but it sits in the working tree, and a plain `git add -A`
+# would publish a stale 1.1 MB duplicate of the app to the live repo.
+*.before-*
+*.bak
+*.orig
+*.rej
+*.tmp
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

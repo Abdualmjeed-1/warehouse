@@ -385,6 +385,44 @@ button,input,select,textarea{font-family:inherit}
       </div>
 
       <div class="card">
+        <div class="card-title">📋 قائمة أصناف المحاسبة</div>
+        <span class="form-hint" style="margin-top:0;margin-bottom:10px">عندما يُعطيك قسم المحاسبة ملفاً جديداً بأصناف جديدة أو مُحدَّثة، استورده هنا. التطبيق يدمجها مع القائمة الحالية — يضيف الجديد ويحدّث المُغيَّر — ولا يمسح شيئاً. يقبل ملف <b>xls</b> الذي يصدّره النظام مباشرة، وكذلك <b>xlsx</b> و<b>CSV</b>.</span>
+        <div class="stack">
+          <button class="btn btn-outline btn-block" data-action="import-articles">📥 استيراد ملف الأصناف</button>
+          <button class="btn btn-outline btn-block" data-action="add-article">➕ إضافة صنف يدوياً</button>
+          <input type="file" id="article-import-input" accept=".xls,.xlsx,.csv,.txt,.tsv" style="display:none">
+        </div>
+        <span class="form-hint" id="article-import-hint" style="margin-top:9px"></span>
+
+        <div id="article-missing-wrap"></div>
+
+        <div class="divider"></div>
+        <label class="form-label" for="article-search">🔍 تعديل صنف محفوظ</label>
+        <input type="text" id="article-search" class="form-input" placeholder="اكتب رقم الصنف أو جزءاً من الاسم" autocomplete="off">
+        <div id="article-search-results" class="stack" style="gap:8px;margin-top:9px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🏷️ اسم المنتج المعروض</div>
+        <span class="form-hint" style="margin-top:0;margin-bottom:6px">بأي اسم يظهر المنتج في القوائم وشيت التفاصيل، <b>وفي الطباعة بكل أنواعها</b> (PDF و Excel و CSV).</span>
+        <div class="switch-row" style="padding-top:6px">
+          <div>
+            <div style="font-size:14px;font-weight:500">الاسم الذي كتبته أنت</div>
+            <span class="form-hint" style="margin-top:3px">كما كتبته، أو كما جاء من الباركود. وهو الافتراضي.</span>
+          </div>
+          <input type="radio" name="name-source" value="own" id="name-source-own" style="width:20px;height:20px;flex:0 0 auto;accent-color:var(--primary)">
+        </div>
+        <div class="divider"></div>
+        <div class="switch-row" style="padding-top:0">
+          <div>
+            <div style="font-size:14px;font-weight:500">اسم الصنف من المحاسبة (Article)</div>
+            <span class="form-hint" style="margin-top:3px">الاسم الرسمي حسب رقم الصنف. وإن لم يكن للمنتج رقم صنف، أو كان الرقم غير موجود في القائمة، يظهر الاسم الذي كتبته.</span>
+          </div>
+          <input type="radio" name="name-source" value="article" id="name-source-article" style="width:20px;height:20px;flex:0 0 auto;accent-color:var(--primary)">
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-title">📍 أماكن التخزين</div>
         <span class="form-hint" style="margin-top:0;margin-bottom:10px">حدد أماكن التخزين لديك. ستظهر كقائمة عند إضافة أو تعديل أي منتج.</span>
         <div id="locations-list" class="stack" style="gap:8px"></div>
@@ -469,6 +507,15 @@ button,input,select,textarea{font-family:inherit}
       </div>
 
       <div class="form-group">
+        <label class="form-label" for="product-article-no">رقم الصنف في المحاسبة <span style="font-weight:400;color:var(--gray)">(اختياري)</span></label>
+        <div class="input-group">
+          <input type="text" id="product-article-no" class="form-input mono" placeholder="مثال: 141010" inputmode="numeric" autocomplete="off" list="article-options">
+        </div>
+        <span class="form-hint" id="article-hint"></span>
+        <datalist id="article-options"></datalist>
+      </div>
+
+      <div class="form-group">
         <label class="form-label" for="product-quantity">الكمية *</label>
         <div class="input-group">
           <input type="number" id="product-quantity" class="form-input" placeholder="0" min="0" step="1" inputmode="decimal">
@@ -538,6 +585,33 @@ button,input,select,textarea{font-family:inherit}
   </div>
 </div>
 
+<!-- Article editor (add / edit a row of the accounting list by hand) -->
+<div id="article-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="article-modal-title" style="font-size:16.5px">إضافة صنف</h2>
+      <button class="close-btn" data-action="close-modal" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="article-no">Article No. — رقم الصنف *</label>
+        <input type="text" id="article-no" class="form-input mono" placeholder="مثال: 141010" inputmode="numeric" autocomplete="off">
+        <span class="form-hint" id="article-no-hint"></span>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="article-name">Article — اسم الصنف *</label>
+        <input type="text" id="article-name" class="form-input" placeholder="مثال: Beef Tenderloin BRZ" autocomplete="off">
+        <span class="form-hint">الاسم الرسمي كما في المحاسبة. هذا ما يظهر للمنتج إذا اخترت «اسم الصنف من المحاسبة».</span>
+      </div>
+      <div id="article-modal-extra"></div>
+      <div class="stack" style="margin-top:4px">
+        <button class="btn btn-primary btn-block" data-action="save-article">💾 حفظ</button>
+        <button class="btn btn-danger btn-block" data-action="delete-article" id="article-delete-btn" style="display:none">🗑️ حذف هذا الصنف من القائمة</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Scanner -->
 <div id="scanner-modal" class="modal">
   <div class="modal-content">
@@ -582,13 +656,16 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.8.0';
+var APP_VERSION = '2.11.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
    year of moves stays live; anything older is moved aside, still readable,
    still included in a backup. */
-var DB_VERSION = 4;
+/* v5 adds `articles` — the accounting department's article list, seeded from
+   the built-in ARTICLE_LIST. Read once at boot and kept in memory; it is a
+   lookup table, not a catalogue, so it is never scanned row by row. */
+var DB_VERSION = 5;
 var SETTINGS_KEY = 'tios:settings';
 var ARCHIVE_AFTER_DAYS = 365;
 /* 256 px, not 400. Every thumbnail is stored as a base64 JPEG inside IndexedDB,
@@ -654,6 +731,293 @@ var BARCODE_FORMATS = [
   'QR_CODE','DATA_MATRIX','PDF_417','AZTEC'
 ];
 
+/* The accounting department's article list: 270 rows exported from
+   `SOH Control.xls` (sheet "Data", columns "Article No." and "Article").
+   Kept as a plain array literal rather than fetched from a file, because the
+   app makes a point of never issuing a network request — same reason the two
+   barcode engines are inlined. It is 10.7 KB of UTF-8, so it costs less than a
+   single product photo.
+   This is a LOOKUP TABLE, not the catalogue: it answers "the papers say
+   141010 — what is that called in my warehouse?" and nothing more. Products
+   live in IndexedDB; this list only ever fills in the `article` field, and a
+   product is free to carry a number this list has never heard of.
+   It is also only the STARTING list. When the department sends a newer export,
+   the user imports it from Settings; those rows are stored with `src:'file'`
+   and this seed then leaves them alone, so the copy shipped inside the app can
+   never silently revert an import. */
+var ARTICLE_LIST = [
+  ["101003","Butter Oil (Ghee) \" Can 1600 GR\""],
+  ["101004","Butter Portion AlMarai \"Box 100Pcs* 10Gr\""],
+  ["101015","Butter Block ( Block 25 KG)"],
+  ["102004","Cheese Cheddar White"],
+  ["102034","Cheese Cream Kirri Almarai Portion \"Pkt 24 Pcs\""],
+  ["102035","Cheese Burrata \"Pkt 250 GR\""],
+  ["102040","Cheese Chedder Sliced"],
+  ["102050","Cheese Cheddar Yellow"],
+  ["102065","Cheese Emental"],
+  ["102110","Cheese Halloumi"],
+  ["102115","Cheese Mozzarella Grated"],
+  ["102140","Cheese Parmiggiano Reggianno"],
+  ["102155","Cheese Roquefort \"Danish Blue\""],
+  ["103006","Labne \"Gallon 2.750  KG\""],
+  ["103008","Kashta Cream \"Gallon 5 KG\""],
+  ["103013","Cheese Mascarpone \"Pkt 1 Ltr\""],
+  ["103015","Cream Whipping Millac Gold"],
+  ["103018","Labne Nutrica TUR.\"Gallon 2.75  KG\""],
+  ["105002","Milk Barista \"Pkt 1Lit\""],
+  ["105003","Milk Condensed \"Tin 1 KG\""],
+  ["105007","Jameed"],
+  ["105015","Milk Full Fat \"Al Marai \" \"Pkt 1Ltr \""],
+  ["112013","Fruit Frozen Peach Pure"],
+  ["112022","Fruit Frozen Fruit Mix"],
+  ["115006","Frozen Vegetables Mixed Vegetables"],
+  ["115011","Frozen Vegetables Okra"],
+  ["115013","Frozen Vegetables Green Peas"],
+  ["115014","Frozen Vegetables Potato Hash Brown"],
+  ["115015","Frozen Vegetables Spinach"],
+  ["115016","Frozen Vegetables Molokhia"],
+  ["115028","Frozen French Fries Skin On 7/7 Shoestring"],
+  ["121001","Vine Leaves Stuffed \"Tin 2.5 KG\""],
+  ["121002","Sweet Corn \" Tin 2.500 KG\""],
+  ["121003","Demi Glace Powder \" Pkt 750 Gr\""],
+  ["121004","Tahini \"Tin 15 KG\""],
+  ["121005","Paste Red Pepper Sweet \"4200 GR\""],
+  ["121010","Anchovy \"Tin 1 KG\""],
+  ["121012","Foul Beans \"Tin 2.5 kg\""],
+  ["121014","Sun Dried Tomato \"Jar 2.8KG\""],
+  ["121016","Tomato Peeled IMP \"Tin 2.55 KG\""],
+  ["121020","Artichoke Hearts\"Can 400 Gr\""],
+  ["121024","White Beans Baked \"Can 400 Gr\""],
+  ["121031","Pepper Jalapeno \"Tin 2.80 KG\""],
+  ["121041","Beans Black \"Can 400 Gr\""],
+  ["121042","Paste Red Pepper Hot \"4200 GR\""],
+  ["121048","Grape Seed Oil 12X500 ml"],
+  ["121055","Chicken Stock Powder Knorr \"Pkt 1 Kg\""],
+  ["121060","Capers \"Jar 245 GM\""],
+  ["121062","Vinegar Rice \"Btl 910 Ml\""],
+  ["121067","Panca Pepper Paste (Aji Panca)\"Jar 213Gr\""],
+  ["121073","Tomato Paste \"Tin 4.300 KG\""],
+  ["121076","Pepper Green Corn \" Jar 110 Gr\""],
+  ["121077","Ketchup Portion"],
+  ["121078","Mayonnaise Portion"],
+  ["121081","Vine Leaves Stuffed W/Pomegranate \"Tin 280 Gr\""],
+  ["121082","Ketchup Portion Mini 72x30GM Mini Jar"],
+  ["121085","Coconut Milk \"Can 400 Gr\""],
+  ["121105","Ketchup Staff \"Gallon 5 KG\""],
+  ["121130","Mayonnaise  \"Gallon 3.78 Kg\""],
+  ["121180","Red Kidney Beans \"Can 400 Gr\""],
+  ["122001","Biryani Spice Powder"],
+  ["122002","7Spices \"Each 200 GR\""],
+  ["122003","Oregano Dry \"Can 142 GR\""],
+  ["122004","Arabic Spices \"Each 200 GR\""],
+  ["122006","Salt Lemon \"KG\""],
+  ["122007","Zattar Powder"],
+  ["122009","Bay Leaves"],
+  ["122014","Salt Sea 500Gr (Organic)"],
+  ["122017","Garlic Powder"],
+  ["122018","Onion Powder"],
+  ["122019","Garlic Rosted Powder"],
+  ["122021","Paprika Hot \"Pkt 454 KG\""],
+  ["122026","Kasuri Methi Leave \"Pkt 50 Gr\""],
+  ["122027","Saffron Spanish 3Gr"],
+  ["122029","ShishTaouk Seasnoing\"Jar 200 GR\""],
+  ["122040","Cardamon Powder"],
+  ["122045","Cardamon Seeds"],
+  ["122055","Cajun Seasoning \" Pkt 680 Gr\""],
+  ["122060","Cinnamon Powder"],
+  ["122070","Clove Grain"],
+  ["122080","Corriander Powder"],
+  ["122090","Cumin Powder"],
+  ["122095","Cumin Seeds"],
+  ["122100","Curry Powder"],
+  ["122140","Dried Lemon"],
+  ["122180","Fennel Seeds"],
+  ["122190","Garam Masala \"Pkt 100 Gr\""],
+  ["122250","Chilli Powder"],
+  ["122255","Pepper Black Powder"],
+  ["122275","Paprika Sweet\"Pkt 454 KG\""],
+  ["122280","Pepper Black Seeds"],
+  ["122300","Pepper Red Chilli Flakes \"Pkt 340 Gr\""],
+  ["122340","Salt Coarse \"Pkt 2.5 Gr\""],
+  ["122355","Salt Table \"Pkt 750 GR\""],
+  ["122365","Sumac Ground"],
+  ["122375","Turmeric \"Curcum\" Powder"],
+  ["123005","Oil Cooking Dalal \"Tin17 Litre\""],
+  ["123006","Oil Cooking Afia \"Tin17 Litre\""],
+  ["123020","Oil Olive Extra Virgin \"Tin 10 Lit\""],
+  ["123035","Oil Spray For Pastry"],
+  ["124004","Pasta Egg Noodels"],
+  ["124005","Pasta Penne Rigate IMP \"Pkt 1 KG\""],
+  ["124009","Pasta Penne Rigate IMP \"Pkt 500 GR\""],
+  ["124015","Pasta Couscus \"Pkt 500 Gr\""],
+  ["124026","Pasta Vermicelli CUT No.61"],
+  ["124027","Pasta Spagetti IMP \"Pkt 500GR\""],
+  ["124030","Pasta Fettuccelle IMP \"Pkt 500 GM\""],
+  ["124033","Pasta Lasagna Imp DeCecco \"Pkt 500 Gr\""],
+  ["124034","Pasta Orzo Bird Tong"],
+  ["124036","Pasta Rigatoni IMP \"Pkt 1 KG\""],
+  ["124040","Pasta Linguini"],
+  ["124050","Pasta Fusilli IMP \"Pkt 1 KG\""],
+  ["124055","Pasta Penne Gluten Free"],
+  ["124060","Pasta Penne Plain"],
+  ["124070","Pasta Spagetti IMP \"Pkt 1 KG\""],
+  ["124075","Pasta Fusilloni Gluten Free"],
+  ["124080","Pasta Spagetti Plain"],
+  ["124085","Pasta Tagliatelli Imp \"Pkt 500 Gr\""],
+  ["124095","Pasta Vermicelli Nest No.60"],
+  ["125003","Olives Green Sliced \" Tin 3 KG\""],
+  ["125005","Olive Black Whole \"Tin 5 Kg\""],
+  ["125015","Olive Black Kalamata \"Tin 10 KG\""],
+  ["125025","Olive Green Whole \"Tin 5 Kg\""],
+  ["126003","Gerish Wheat"],
+  ["126006","Chana Dal \"Bag 15 KG\""],
+  ["126008","Moong Dal \"Bag 15 KG\""],
+  ["126011","Quinoa White Seeds \"Pkt 1 KG\""],
+  ["126012","Quinoa Red Seeds \"Pkt 1 Kg\""],
+  ["126015","Beans White \"Bag 15 KG\""],
+  ["126020","Chickpeas No12 \"Bag 15 Kg\""],
+  ["126035","Lentil Red \"Bag 15 Kg\""],
+  ["126040","Rice Basmati Abo Kass \"Bag40 KG\""],
+  ["126045","Rice Jasmen \"Bag 10 Kg\""],
+  ["126055","Rice Egyption"],
+  ["127003","Vinegar Apple Cider \"Btl 500 Ml\""],
+  ["127011","Sauce Soy \"Btl 750 ML\""],
+  ["127015","Pomegranate Sauce \"Btl 500 ML\""],
+  ["127090","Sauce Oyster \"Btl 600 ML\""],
+  ["127110","Sauce Soy Sweet \"Btl 625 ML\""],
+  ["127115","Sauce Sweet Chilli Red \"Btl 700 Ml\""],
+  ["127155","Vinegar Balsamico \"Btl 500 ML\""],
+  ["127160","Vinegar White \"Gallon 3.78 Lit\""],
+  ["132020","Juice Lemon Large"],
+  ["133001","Juice Orange Powder TANG \"Tin 2KG\""],
+  ["133002","Juice Mango Powder TANG\" Tin 2KG\""],
+  ["134001","Juice Apple Small \" Btl 250 Ml \""],
+  ["134002","Juice Orange Small \"Btl 250 Ml\""],
+  ["141007","Beef Tenderloin GF Black Angs \"AUS\""],
+  ["141009","Beef Top Side \"BRZ\""],
+  ["141010","Beef Brisket"],
+  ["141018","Beef Tomahawk BA \"AUS\""],
+  ["141045","Beef Tenderloin BRZ"],
+  ["143001","Lamb Rack Fr.Cut Standard \"MC Herd\""],
+  ["143003","Lamb Shoulder \"Aust\""],
+  ["143005","Lamb Hand Shank \"AUS\""],
+  ["143009","Lamb Leg Bonn In \"AUS\""],
+  ["143010","Lamb Leg Boneless \"AUS\""],
+  ["143020","Lamb Rack"],
+  ["145003","Beef Sausage Americana"],
+  ["145008","Beef Peperoni"],
+  ["145011","Beef Bacon KG"],
+  ["146001","Veal Rack Bone in Short"],
+  ["146020","Veal Top Side"],
+  ["150004","Biscuits Lady Finger \"Pkt 400 GR\""],
+  ["150009","Baking Powder \"Pkt 100 Gr\""],
+  ["150011","Vanilla Powder \"Pkt 20 Gr\""],
+  ["150013","Vimto Syrup \"Btl 710 ML\""],
+  ["150025","Breaded Crumbs - Panco"],
+  ["150034","Tart Mini Round Choco1114 37*16 MM ( Box 252 Pcs )"],
+  ["150041","Red Velvet Cake Mix"],
+  ["150045","Chocolate Nutella \"Jar 750 GM\""],
+  ["150066","Rose Water \"Btl 270 ML\""],
+  ["150075","Bm Zeelandia Rap Cold Custard"],
+  ["150085","Compote Peach"],
+  ["150190","Gelatine Powder \"Tin 700 GR\""],
+  ["150260","Baking Soda \"Pkt 100 GR\""],
+  ["150265","Topping Chocolat"],
+  ["150270","Topping Strawberry"],
+  ["150295","Topping Caramel"],
+  ["150310","Syrup Maple \"Bottle 710 ML\""],
+  ["151001","Cereals Choco Flakes \"Pkt 375 Gr\""],
+  ["151003","Cereal Fitness Fruits\"Pkt 375 GR\""],
+  ["151020","Cereals Corn Flakes \"Pkt 1 KG\""],
+  ["151050","Oat Meal Quaker"],
+  ["152005","Chocolate Edelwss White 36%-CS84E\"Pkt 2 Kg\""],
+  ["152015","Chocolate Maracaibo Milk 38% - CS36S"],
+  ["152016","Chocolate Accra Dark 62% - CS73S"],
+  ["153005","Apricots Dried (CTN/4 Kg)"],
+  ["153010","Coconut Ground (Bag/ 7 KG)"],
+  ["153045","Raisin Dried KG"],
+  ["154001","Yeast Dry \" Pkt 500 Gr \""],
+  ["154011","Bakemate Vanilla Muffin Mix"],
+  ["154015","Flour Pizza Caputo \"Bag 25 KG\""],
+  ["154017","Flour Brown \"Pkt 1 KG\""],
+  ["154022","Chia Seed Black \"Pkt\""],
+  ["154023","Flour Sponge Vanila Mix \"Bag 10 Kg\""],
+  ["154024","Sunflower Seed"],
+  ["154034","Corn Flour Al Alali \"Pkt 100 Gr\""],
+  ["154037","Flour Tempurako \"Pkt 1 KG\""],
+  ["154038","Red Velvet Cake Mix \"Pkt 1 KG\""],
+  ["154039","Sesame Seeds Black \"KG\""],
+  ["154085","Flour White"],
+  ["154105","Pumpkin Seed"],
+  ["154110","Semolina \"Bag 15 KG\""],
+  ["154120","Sesame Seeds White"],
+  ["156006","Honey White Portion \"Box144*30GR\""],
+  ["156007","Jam Portion Red Chery MJ 28Grx60"],
+  ["156011","Jam Portion Orang Diet \"Box28*60 Pcs\""],
+  ["156012","Jam Portion Strawberry \"Box28*60 Pcs\""],
+  ["156013","Jam Portion Apricot \"Box28*60 Pcs\""],
+  ["156014","Honey White \"Gallon 3 KG\""],
+  ["157004","Pecan Nuts"],
+  ["157010","Almond Flaked"],
+  ["157025","Almond Whole"],
+  ["157030","Cashew Nut"],
+  ["157035","Hazelnut Whole"],
+  ["157065","Pistachio Whole"],
+  ["157080","Walnut Whole"],
+  ["158002","Kunafa Plain"],
+  ["158022","Phyllo Dough For Pastry"],
+  ["159005","Sugar Brown Cubes \"Pkt 1KG\""],
+  ["159011","Sugar Brown  \"Pkt 2 KG\""],
+  ["159015","Sugar Icing"],
+  ["159045","Sugar White \"Bag 50 Kg\""],
+  ["160006","Chicken Whole BRZ. 1200 KG"],
+  ["160007","Chicken Whole BRZ.\"Pcs 800 GR\""],
+  ["160010","Chicken Breast"],
+  ["160020","Chicken Liver"],
+  ["160035","Duck Foie Gras Frozen"],
+  ["161004","Chicken Sausage Americana"],
+  ["161008","Turkey Breast Smoked Halwany"],
+  ["161009","Chicken Nuggets \"KG\""],
+  ["171003","Fish Fillet Basa"],
+  ["171006","Fish Frozen Hammour Fillet"],
+  ["171007","Lobster Tail \"Oman\""],
+  ["171009","Shrimp Jumbo U10 Frozen"],
+  ["171010","Mussels Meat Frozen"],
+  ["171012","Shrimp Jumbo 16/20 Peeled Frozen"],
+  ["171014","Mussels Half Shel Frozen"],
+  ["171020","Fish Frozen Salmon Fillet Skin On"],
+  ["171022","Clams Meat"],
+  ["171023","Lobster Whole Large"],
+  ["171025","Scallop Meat"],
+  ["172045","Smoked Salmon"],
+  ["201003","Nescafe Classic \"Jar 200 GR\""],
+  ["201006","Coffee Capsules Lavaza DEK (Box 10*10)"],
+  ["201007","Coffee Capsules Lavaza ROSSA (Box 10*10)"],
+  ["201008","Coffee Capsules Lavaza ORO (Box 10*10)"],
+  ["201015","Coffee Beans \"Pkt 1 KG\""],
+  ["201019","Coffee Beans Lavaza \"Pkt 1 KG\""],
+  ["201025","Coffee Turkish"],
+  ["203005","Tea Dilmah English Breakfast \"Pkt 25 Pcs\""],
+  ["203009","Tea Dilmah Pyramid Pure Chamomile \"Pkt 30 Pcs\""],
+  ["203010","Tea Black Lipton \"Pkt 100 Pcs\""],
+  ["203011","Tea Dilmah Pyramid Rose&Vanilla \"Pkt 50 Pcs\""],
+  ["203012","Tea Dilmah Pyramid Morocan Mint T.Green  \"Pkt 50 Pcs\""],
+  ["203023","Tea Dilmah Pure Green \"Pkt 25 Pcs\""],
+  ["203024","Tea Dilmah Earl Grey \"Pkt 25 Pcs\""],
+  ["211008","Water Still Berain 330 Ml.\"Box 40 Pcs\""],
+  ["211020","Water Still Berain 270 Ml."],
+  ["211025","Water Still Berain 750 Ml."],
+  ["212015","Water Sparkling Berain 270 Ml."],
+  ["212020","Water Sparkling Berain 750 Ml."],
+  ["221005","Coca Cola Bottles 250 Ml"],
+  ["221010","Coca Cola Diet Bottles 250Ml"],
+  ["221015","Fanta Orange Bottles 250Ml"],
+  ["221020","Sprite Bottles 250Ml"],
+  ["222005","Coca Cola Cans 250 Ml"],
+  ["222010","Coca Cola Light Cans 250 Ml"],
+  ["222050","Sprite Cans 250 Ml"]
+];
+
 /* ===================== State ===================== */
 var db = null;
 var currentEditingId = null;
@@ -678,7 +1042,7 @@ var pendingScanCode = null;
 var torchOn = false;          // rear-camera flash, toggled from the scanner
 var lookupResult = null;      // last successful global lookup, used to pre-fill the form
 var lookupImageToken = 0;     // guards against a late image overwriting the user's own photo
-var settings = { notificationsEnabled: true, warningDays: 30, sortBy: 'expiry', lastBackup: 0, installBannerDismissed: false, lookupEnabled: true, locations: ['Frozen Food', 'Food Store', 'General Store', 'Chemical Store'] };
+var settings = { notificationsEnabled: true, warningDays: 30, sortBy: 'expiry', lastBackup: 0, installBannerDismissed: false, lookupEnabled: true, locations: ['Frozen Food', 'Food Store', 'General Store', 'Chemical Store'], nameSource: 'own' };
 
 /* The four built-in locations were renamed to English in 2.6.0. An install
    that already exists still carries the Arabic names — in the settings blob on
@@ -1057,6 +1421,15 @@ function openDB() {
       if (!database.objectStoreNames.contains('lookup')) {
         database.createObjectStore('lookup', { keyPath: 'barcode' });
       }
+
+      /* v5. The accounting department's article list — `no` is the key, so a
+         re-seed overwrites instead of duplicating, and the whole list is
+         read in one `getAll()` at boot. Kept in the database rather than read
+         straight from ARTICLE_LIST so a later release can ship a corrected
+         list without touching the code path that reads it. */
+      if (!database.objectStoreNames.contains('articles')) {
+        database.createObjectStore('articles', { keyPath: 'no' });
+      }
     };
   });
 }
@@ -1097,6 +1470,946 @@ function putProduct(data) {
 function deleteProductFromDB(id) {
   invalidateProducts();
   return reqPromise(tx(['products'], 'readwrite').objectStore('products').delete(id));
+}
+
+/* ---- Accounting articles (Article No. → Article) ------------------------
+   The list lives in its own store and is read once into `articleIndex`. The
+   app never scans it row by row: every answer comes from a Map lookup, so
+   the cost is the same whether the list holds 270 rows or 27,000. */
+
+var articleIndex = null;        /* Map: articleNo(string) → article(string) */
+var articleRows = null;         /* Map: articleNo(string) → the stored row */
+
+/* Three provenances, in order of authority:
+     'manual'  typed or corrected by hand in Settings — outranks everything
+     'file'    came from the department's export
+     'builtin' shipped inside the app
+   Both the built-in seed and a file import leave 'manual' rows alone. A hand
+   correction is a decision the user made on purpose, and letting either of the
+   other two overwrite it is the same silent-revert bug as the seed one — only
+   slower, because it would take a new export a month later to surface. */
+
+/* Seed the store from the built-in ARTICLE_LIST. Runs on every boot, but only
+   writes when something actually differs — the list is compared against what
+   is already stored, so a normal start-up touches nothing. Idempotent. */
+function seedArticles() {
+  return reqPromise(tx(['articles'], 'readonly').objectStore('articles').getAll())
+    .then(function (existing) {
+      /* A row the user or an imported file supplied is skipped outright — not
+         merely left out of the comparison. Leaving it out would make the seed
+         read the number as absent and write the built-in name straight over
+         the import, on every single boot. The department's latest export, and
+         a correction typed in by hand, both have to beat the list baked into
+         the app. */
+      var have = {}, owned = {};
+      existing.forEach(function (row) {
+        if (row.src === 'file' || row.src === 'manual') owned[row.no] = true;
+        else have[row.no] = row.article;
+      });
+
+      var missing = [];
+      ARTICLE_LIST.forEach(function (pair) {
+        if (owned[pair[0]]) return;
+        if (have[pair[0]] !== pair[1]) missing.push({ no: pair[0], article: pair[1], src: 'builtin' });
+      });
+      if (!missing.length) return existing.length;
+
+      return new Promise(function (resolve, reject) {
+        var transaction = tx(['articles'], 'readwrite');
+        var store = transaction.objectStore('articles');
+        missing.forEach(function (row) { store.put(row); });
+        transaction.oncomplete = function () { resolve(missing.length); };
+        transaction.onerror = function () { reject(transaction.error); };
+        transaction.onabort = function () { reject(transaction.error); };
+      });
+    });
+}
+
+/* Load the whole list into the in-memory Map. Called once at boot and again
+   after any restore of a backup, so the map can never be stale. */
+function loadArticleIndex() {
+  return reqPromise(tx(['articles'], 'readonly').objectStore('articles').getAll())
+    .then(function (rows) {
+      articleIndex = new Map();
+      articleRows = new Map();
+      rows.forEach(function (row) {
+        var no = String(row.no);
+        articleIndex.set(no, row.article);
+        articleRows.set(no, row);
+      });
+      return articleIndex.size;
+    });
+}
+
+/* The article name for a number, or '' when this list has never heard of it.
+   A product is allowed to carry a number the list does not know — the
+   accounting department adds articles the warehouse has not been told
+   about yet, and refusing to save would be worse than a blank name. */
+function articleName(no) {
+  if (!articleIndex || !no) return '';
+  return articleIndex.get(String(no).trim()) || '';
+}
+
+/* Every article whose number or name matches `query`. Numbers match by prefix
+   (typing "141" should find 141007, 141009, 141010 …); names match anywhere,
+   because the memorable part of "Beef Tenderloin BRZ" is the middle of it. */
+function searchArticles(query) {
+  if (!articleIndex || !query) return [];
+  var q = String(query).trim().toLowerCase();
+  if (!q) return [];
+  var hits = [];
+  articleIndex.forEach(function (name, no) {
+    if (no.indexOf(q) === 0 || name.toLowerCase().indexOf(q) !== -1) {
+      hits.push({ no: no, article: name });
+    }
+  });
+  /* Numbers first — an exact-prefix hit is almost always the intent. */
+  hits.sort(function (a, b) {
+    var aPre = a.no.indexOf(q) === 0 ? 0 : 1;
+    var bPre = b.no.indexOf(q) === 0 ? 0 : 1;
+    if (aPre !== bPre) return aPre - bPre;
+    return a.no.localeCompare(b.no);
+  });
+  return hits.slice(0, 8);
+}
+
+function countArticles() {
+  return reqPromise(tx(['articles'], 'readonly').objectStore('articles').count());
+}
+
+/* ---- Editing the list by hand ------------------------------------------
+   The department's export is not always right and is never complete: an
+   article can be missing from it, or carry a name the warehouse knows to be
+   wrong. So the list has to be editable from the phone, without a laptop and
+   without waiting for the next export. */
+
+/* Where a stored row came from — used for the badge in Settings. */
+function articleSrc(no) {
+  var row = articleRows && articleRows.get(String(no).trim());
+  return (row && row.src) || 'builtin';
+}
+
+/* Is this number one the app ships with? Asked when a row is deleted: the seed
+   will put a built-in number back on the next boot, so the user should hear
+   that before they agree, not discover it later. Note this asks about the
+   NUMBER, not about the stored row's `src` — a built-in number that was
+   corrected by hand is still a built-in number, and still comes back. */
+var builtinArticleNos = null;
+function isBuiltinArticle(no) {
+  if (!builtinArticleNos) {
+    builtinArticleNos = {};
+    ARTICLE_LIST.forEach(function (pair) { builtinArticleNos[pair[0]] = true; });
+  }
+  return !!builtinArticleNos[String(no).trim()];
+}
+
+/* Add a row, or change one that is already there.
+
+   `originalNo` is the number the row carried when the editor opened. When it
+   differs from the new one the row is **re-keyed**, because the store is keyed
+   by the number itself: the old key has to be deleted and the new one written.
+   Both happen in ONE transaction — two separate ones would leave the number
+   stored under both keys if the second failed, and then `articleName()` would
+   answer with whichever the index happened to load last. */
+function saveArticleRow(originalNo, no, article) {
+  no = String(no).trim();
+  article = String(article).trim();
+  var from = originalNo == null || originalNo === '' ? '' : String(originalNo).trim();
+  var row = { no: no, article: article, src: 'manual', at: Date.now() };
+
+  return new Promise(function (resolve, reject) {
+    var transaction = tx(['articles'], 'readwrite');
+    var store = transaction.objectStore('articles');
+    if (from && from !== no) store.delete(from);
+    store.put(row);
+    transaction.oncomplete = function () { resolve(row); };
+    transaction.onerror = function () { reject(transaction.error); };
+    transaction.onabort = function () { reject(transaction.error); };
+  });
+}
+
+/* Forget a row. If the number is also one of the built-in ones, the next boot
+   seeds it back — which is right: the article exists, only the correction is
+   gone. A number that came from a file or was typed by hand simply disappears
+   until the next import brings it back. */
+function deleteArticleRow(no) {
+  return new Promise(function (resolve, reject) {
+    var transaction = tx(['articles'], 'readwrite');
+    transaction.objectStore('articles').delete(String(no).trim());
+    transaction.oncomplete = function () { resolve(true); };
+    transaction.onerror = function () { reject(transaction.error); };
+    transaction.onabort = function () { reject(transaction.error); };
+  });
+}
+
+/* How many products carry this number. Asked before a re-key so the user can
+   be told what a renumbering would strand. */
+function countProductsWithArticleNo(no) {
+  no = String(no).trim();
+  return getAllProducts().then(function (all) {
+    return all.filter(function (p) {
+      return String(p.articleNo || '').trim() === no;
+    }).length;
+  });
+}
+
+/* Carry a renumbering through to the products. Only ever called after the user
+   says yes: changing the list is not permission to rewrite their rows. */
+function moveProductsArticleNo(from, to) {
+  from = String(from).trim();
+  to = String(to).trim();
+  return getAllProducts().then(function (all) {
+    var moved = [];
+    all.forEach(function (p) {
+      if (String(p.articleNo || '').trim() !== from) return;
+      p.articleNo = to;
+      p.article = articleName(to) || '';
+      moved.push(p);
+    });
+    if (!moved.length) return 0;
+    return putManyProducts(moved).then(function () { return moved.length; });
+  });
+}
+
+/* Numbers the products are using that this list cannot name. Derived on every
+   render and never stored: a stored flag would have to be synced on every path
+   that touches either the products or the list, and the first path missed
+   leaves a row that lies. */
+function articlesMissingName() {
+  return getAllProducts().then(function (all) {
+    var counts = {};
+    all.forEach(function (p) {
+      var no = String(p.articleNo || '').trim();
+      if (!no) return;
+      if (articleName(no)) return;      /* already named — nothing to do */
+      counts[no] = (counts[no] || 0) + 1;
+    });
+    return Object.keys(counts).sort().map(function (no) {
+      return { no: no, products: counts[no] };
+    });
+  });
+}
+
+/* ===================== Reading the accounting file =====================
+   The department hands over `SOH Control.xls` — a legacy BIFF8 workbook
+   inside an OLE2 compound file. No browser API reads that, and this app ships
+   no dependencies, so the reader is written out below by hand.
+
+   It is a reader for THIS shape of file, not a spreadsheet engine: it finds
+   two columns and ignores the other five. Three formats are covered —
+
+     .xls   BIFF8 in an OLE2 container — what the department exports
+     .xlsx  the same data as an Office Open XML zip
+     .csv   what the user falls back to when Excel is not at hand
+
+   — and the format is chosen by sniffing the first bytes, not the extension,
+   because these files are routinely saved under the wrong one.
+
+   Why not simply ask for a CSV: it puts a manual export step in front of a job
+   that happens every month, and the first time Excel is not available the
+   feature is dead. */
+
+/* ---- little-endian byte readers, as the format requires ---- */
+function rdU16(b, o) { return b[o] | (b[o + 1] << 8); }
+function rdU32(b, o) {
+  return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
+}
+
+/* ---- OLE2 / Compound File: get the streams out of the container ----
+   The container is a small FAT filesystem. The header names the sectors
+   holding the allocation table, the directory lists the streams, and anything
+   under 4096 bytes lives in a second, mini-sized FAT. Only one stream is ever
+   needed — `Workbook` — but the machinery has to be right to reach it. */
+function readOleStreams(bytes) {
+  if (bytes.length < 512 || rdU32(bytes, 0) !== 0xE011CFD0 || rdU32(bytes, 4) !== 0xE11AB1A1) {
+    return null;
+  }
+  var ssz = 1 << rdU16(bytes, 0x1E);
+  var mssz = 1 << rdU16(bytes, 0x20);
+  var nFat = rdU32(bytes, 0x2C);
+  var dirStart = rdU32(bytes, 0x30);
+  var cutoff = rdU32(bytes, 0x38);
+  var miniStart = rdU32(bytes, 0x3C);
+  var difatStart = rdU32(bytes, 0x44);
+  var nDifat = rdU32(bytes, 0x48);
+  var i, j;
+
+  function sectorOff(n) { return 512 + n * ssz; }
+
+  /* DIFAT — which sectors hold the FAT. 109 fit in the header; any more are
+     chained through sectors of their own. */
+  var difat = [];
+  for (i = 0; i < 109; i++) difat.push(rdU32(bytes, 0x4C + i * 4));
+  var nxt = difatStart, guard = 0;
+  while (nxt < 0xFFFFFFFA && nDifat > 0 && guard++ < 4096) {
+    var per = ssz / 4 - 1, base = sectorOff(nxt);
+    for (i = 0; i < per; i++) difat.push(rdU32(bytes, base + i * 4));
+    nxt = rdU32(bytes, base + per * 4);
+  }
+
+  var fat = [];
+  for (i = 0; i < nFat && i < difat.length; i++) {
+    if (difat[i] >= 0xFFFFFFFA) continue;
+    var fbase = sectorOff(difat[i]);
+    for (j = 0; j < ssz / 4; j++) fat.push(rdU32(bytes, fbase + j * 4));
+  }
+
+  function chain(start) {
+    var out = [], cur = start, seen = {};
+    while (cur < 0xFFFFFFFA && cur < fat.length && !seen[cur]) {
+      seen[cur] = 1;
+      out.push(cur);
+      cur = fat[cur];
+    }
+    return out;
+  }
+
+  function readChain(start, size) {
+    var parts = chain(start);
+    var want = (size === null || size === undefined) ? parts.length * ssz : size;
+    var out = new Uint8Array(want), p = 0;
+    for (var k = 0; k < parts.length && p < want; k++) {
+      var n = Math.min(ssz, want - p);
+      out.set(bytes.subarray(sectorOff(parts[k]), sectorOff(parts[k]) + n), p);
+      p += n;
+    }
+    return out;
+  }
+
+  /* Directory: 128-byte entries. 2 = a stream, 5 = the root, which owns the
+     mini stream. */
+  var dir = readChain(dirStart, null), entries = [];
+  for (var o = 0; o + 128 <= dir.length; o += 128) {
+    /* The stored length counts the UTF-16 name *and* its terminator, so the
+       last code unit is dropped — keeping it turns "Workbook" into
+       "Workbook\u0000" and the lookup then finds no stream at all. */
+    var nameLen = rdU16(dir, o + 0x40), name = '';
+    for (var c = 0; c < nameLen - 2; c += 2) {
+      name += String.fromCharCode(rdU16(dir, o + c));
+    }
+    entries.push({
+      name: name,
+      type: dir[o + 0x42],
+      start: rdU32(dir, o + 0x74),
+      /* Low dword only — no stream in a file this size comes near 4 GB. */
+      size: rdU32(dir, o + 0x78)
+    });
+  }
+
+  var root = null;
+  for (i = 0; i < entries.length; i++) if (entries[i].type === 5) root = entries[i];
+
+  var minifat = [];
+  if (miniStart < 0xFFFFFFFA) {
+    var mf = readChain(miniStart, null);
+    for (i = 0; i + 4 <= mf.length; i += 4) minifat.push(rdU32(mf, i));
+  }
+  var mini = (root && root.start < 0xFFFFFFFA) ? readChain(root.start, null) : new Uint8Array(0);
+
+  function readMini(start, size) {
+    var out = new Uint8Array(size), p = 0, cur = start, seen = {};
+    while (cur < 0xFFFFFFFA && cur < minifat.length && p < size && !seen[cur]) {
+      seen[cur] = 1;
+      var n = Math.min(mssz, size - p);
+      out.set(mini.subarray(cur * mssz, cur * mssz + n), p);
+      p += n;
+      cur = minifat[cur];
+    }
+    return out;
+  }
+
+  var streams = {};
+  for (i = 0; i < entries.length; i++) {
+    var e = entries[i];
+    if (e.type !== 2 || !e.name) continue;
+    streams[e.name] = e.size < cutoff ? readMini(e.start, e.size) : readChain(e.start, e.size);
+  }
+  return streams;
+}
+
+/* ---- BIFF8: the record stream inside `Workbook` ----
+   Every record is a 2-byte type, a 2-byte length, then that many bytes. */
+function biffRecords(bytes, start) {
+  var out = [], p = start || 0;
+  while (p + 4 <= bytes.length) {
+    var t = rdU16(bytes, p), len = rdU16(bytes, p + 2);
+    p += 4;
+    out.push({ t: t, d: bytes.subarray(p, p + len) });
+    p += len;
+  }
+  return out;
+}
+
+/* A BIFF string: length, a flag byte, then one or two bytes per character.
+   `lenIs8` picks the short form used by sheet names. */
+function biffString(d, o, lenIs8) {
+  var cch;
+  if (lenIs8) { cch = d[o]; o += 1; }
+  else { cch = rdU16(d, o); o += 2; }
+  var wide = d[o] & 1;
+  o += 1;
+  var s = '';
+  for (var i = 0; i < cch; i++) {
+    if (wide) { s += String.fromCharCode(rdU16(d, o)); o += 2; }
+    else { s += String.fromCharCode(d[o]); o += 1; }
+  }
+  return s;
+}
+
+function biffDouble(d, o) {
+  return new DataView(d.buffer, d.byteOffset + o, 8).getFloat64(0, true);
+}
+
+/* RK packs a number into four bytes: bit 1 says it is a 30-bit signed integer,
+   bit 0 says it is scaled by 100. When it is not an integer the four bytes are
+   the HIGH half of an IEEE double, so they are placed as the high word. */
+function biffRk(rk) {
+  var v;
+  if (rk & 0x02) {
+    v = rk >>> 2;
+    if (v & 0x20000000) v -= 0x40000000;
+  } else {
+    var dv = new DataView(new ArrayBuffer(8));
+    dv.setUint32(0, 0, true);
+    dv.setUint32(4, (rk & 0xFFFFFFFC) >>> 0, true);
+    v = dv.getFloat64(0, true);
+  }
+  return (rk & 0x01) ? v / 100 : v;
+}
+
+/* The shared string table. An SST record is capped at 8 KB, so it spills into
+   CONTINUE records — and a name can be sliced in half by that boundary, with
+   the continuation opening on its own flag byte saying whether the remainder
+   is compressed or UTF-16. Walking it per-record instead of per-string
+   corrupts exactly one name per boundary: a bug that only appears once the
+   export grows past the first 8 KB of names, months after it is written. */
+function parseSstStrings(chunks) {
+  var strings = [];
+  if (!chunks.length) return strings;
+  var unique = rdU32(chunks[0], 4);
+  var ci = 0, p = 8;
+
+  function take(n) {
+    var out = new Uint8Array(n), got = 0;
+    while (got < n) {
+      if (ci >= chunks.length) return null;
+      var room = chunks[ci].length - p;
+      if (room <= 0) { ci++; p = 0; continue; }
+      var k = Math.min(room, n - got);
+      out.set(chunks[ci].subarray(p, p + k), got);
+      p += k;
+      got += k;
+    }
+    return out;
+  }
+  function nextChunk() { ci++; p = 0; return ci < chunks.length; }
+
+  while (strings.length < unique) {
+    var head = take(3);
+    if (!head) break;
+    var cch = head[0] | (head[1] << 8), grbit = head[2];
+    var nrun = 0, cbext = 0, b;
+    if (grbit & 0x08) { b = take(2); if (!b) break; nrun = b[0] | (b[1] << 8); }
+    if (grbit & 0x04) { b = take(4); if (!b) break; cbext = rdU32(b, 0); }
+
+    var wide = grbit & 1, chars = '', left = cch;
+    while (left > 0) {
+      if (ci >= chunks.length) break;
+      if (p >= chunks[ci].length) {
+        if (!nextChunk()) break;
+        wide = chunks[ci][p] & 1;
+        p++;
+        continue;
+      }
+      var per = wide ? 2 : 1;
+      var room2 = chunks[ci].length - p;
+      var k2 = Math.min(left, Math.floor(room2 / per));
+      for (var q = 0; q < k2; q++) {
+        chars += wide
+          ? String.fromCharCode(chunks[ci][p + q * 2] | (chunks[ci][p + q * 2 + 1] << 8))
+          : String.fromCharCode(chunks[ci][p + q]);
+      }
+      p += k2 * per;
+      left -= k2;
+      if (left) {
+        if (!nextChunk()) break;
+        wide = chunks[ci][p] & 1;
+        p++;
+      }
+    }
+    if (nrun) take(nrun * 4);
+    if (cbext) take(cbext);
+    strings.push(chars);
+  }
+  return strings;
+}
+
+/* One sheet substream, as a sparse array of rows. Only the record types that
+   carry a value are read; formatting, formulas' internals and the rest are
+   skipped. */
+function parseBiffSheet(bytes, start, sst) {
+  var rows = [], recs = biffRecords(bytes, start), pending = null;
+  function set(r, c, v) { (rows[r] || (rows[r] = []))[c] = v; }
+  for (var i = 0; i < recs.length; i++) {
+    var t = recs[i].t, d = recs[i].d, r, c;
+    if (t === 0x000A) break;                                   /* EOF */
+    if (t === 0x00FD) {                                        /* LABELSST */
+      var isst = rdU32(d, 6);
+      set(rdU16(d, 0), rdU16(d, 2), isst < sst.length ? sst[isst] : '');
+    } else if (t === 0x0203) {                                 /* NUMBER */
+      set(rdU16(d, 0), rdU16(d, 2), biffDouble(d, 6));
+    } else if (t === 0x027E) {                                 /* RK */
+      set(rdU16(d, 0), rdU16(d, 2), biffRk(rdU32(d, 6)));
+    } else if (t === 0x00BD) {                                 /* MULRK */
+      r = rdU16(d, 0); c = rdU16(d, 2);
+      var mn = Math.floor((d.length - 6) / 6);
+      for (var k = 0; k < mn; k++) set(r, c + k, biffRk(rdU32(d, 4 + k * 6 + 2)));
+    } else if (t === 0x0204) {                                 /* LABEL */
+      set(rdU16(d, 0), rdU16(d, 2), biffString(d, 6, false));
+    } else if (t === 0x0006) {                                 /* FORMULA */
+      if (d[12] === 0xFF && d[13] === 0xFF) pending = [rdU16(d, 0), rdU16(d, 2)];
+      else set(rdU16(d, 0), rdU16(d, 2), biffDouble(d, 6));
+    } else if (t === 0x0207 && pending) {                      /* STRING */
+      set(pending[0], pending[1], biffString(d, 0, false));
+      pending = null;
+    }
+  }
+  return rows;
+}
+
+/* ---- .xlsx: a zip of XML parts, read with the platform's own inflate ----
+   `DecompressionStream` is what keeps this from needing a library. Where it
+   is missing (an older Safari) the import says so and points at CSV. */
+function zipEntries(bytes) {
+  var eocd = -1, i;
+  for (i = bytes.length - 22; i >= 0 && i >= bytes.length - 22 - 65558; i--) {
+    if (rdU32(bytes, i) === 0x06054B50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('الملف ليس ملف Excel صالحاً');
+  var count = rdU16(bytes, eocd + 10);
+  var cdOff = rdU32(bytes, eocd + 16);
+  var out = {}, p = cdOff;
+  for (i = 0; i < count; i++) {
+    if (rdU32(bytes, p) !== 0x02014B50) break;
+    var nameLen = rdU16(bytes, p + 28);
+    var extraLen = rdU16(bytes, p + 30);
+    var commentLen = rdU16(bytes, p + 32);
+    var localOff = rdU32(bytes, p + 42);
+    var name = '';
+    for (var k = 0; k < nameLen; k++) name += String.fromCharCode(bytes[p + 46 + k]);
+    /* The local header repeats the name and extra lengths, and those are what
+       locate the data — the central directory does not record them. */
+    var dataOff = localOff + 30 + rdU16(bytes, localOff + 26) + rdU16(bytes, localOff + 28);
+    var csize = rdU32(bytes, p + 20);
+    out[name] = { method: rdU16(bytes, p + 10), data: bytes.subarray(dataOff, dataOff + csize) };
+    p += 46 + nameLen + extraLen + commentLen;
+  }
+  return out;
+}
+
+function inflateEntry(entry) {
+  if (entry.method === 0) return Promise.resolve(entry.data);
+  if (entry.method !== 8 || typeof DecompressionStream !== 'function') {
+    return Promise.reject(new Error(
+      'تعذّر فكّ ضغط ملف xlsx على هذا الجهاز — احفظ الملف بصيغة xls أو CSV'));
+  }
+  var stream = new Blob([entry.data]).stream()
+    .pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Response(stream).arrayBuffer().then(function (buf) {
+    return new Uint8Array(buf);
+  });
+}
+
+/* ---- Turning a grid into pairs ----
+   The export's headings are "Article No." and "Article" — close enough to each
+   other that the test has to be: the number column says so, the name column
+   does not. */
+function pickArticleColumns(row) {
+  var no = -1, name = -1;
+  for (var i = 0; i < row.length; i++) {
+    var t = String(row[i] === null || row[i] === undefined ? '' : row[i])
+      .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if (!t) continue;
+    if (/^article\s+(no|num|number|code|#)$/.test(t)) { if (no < 0) no = i; }
+    else if (/^article\b/.test(t)) { if (name < 0) name = i; }
+  }
+  return { no: no, name: name };
+}
+
+/* A number cell has to read back exactly as the papers print it: "141010",
+   never "141010.0" and never "1.4101e+5". */
+function cellText(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number') {
+    if (!isFinite(v)) return '';
+    if (Math.abs(v - Math.round(v)) < 1e-9 && Math.abs(v) < 1e15) return String(Math.round(v));
+    return String(v);
+  }
+  return String(v).trim();
+}
+
+function emptyArticleResult() {
+  return { rows: [], sheet: '', headerAt: -1, cols: { no: 0, name: 1 }, labels: ['', ''] };
+}
+
+function rowsToArticles(rows) {
+  var headerAt = -1, cols = null, i;
+  for (i = 0; i < Math.min(rows.length, 25); i++) {
+    var c = pickArticleColumns(rows[i] || []);
+    if (c.no >= 0 && c.name >= 0) { headerAt = i; cols = c; break; }
+  }
+  /* No headings anywhere — a re-saved file. Fall back to the export's own
+     layout: the number first, the name second. */
+  if (!cols) cols = { no: 0, name: 1 };
+
+  var out = [], seen = {}, labels = ['', ''];
+  if (headerAt >= 0) {
+    var h = rows[headerAt] || [];
+    labels = [cellText(h[cols.no]), cellText(h[cols.name])];
+  }
+  for (i = headerAt + 1; i < rows.length; i++) {
+    var row = rows[i];
+    if (!row) continue;
+    var no = cellText(row[cols.no]);
+    var article = cellText(row[cols.name]);
+    /* Skips the heading itself when the headings were not recognised, and any
+       repeated number — a later row must not overwrite an earlier one. */
+    if (!no || !article || seen[no] || /^article\b/i.test(no)) continue;
+    seen[no] = 1;
+    out.push({ no: no, article: article });
+  }
+  return { rows: out, sheet: '', headerAt: headerAt, cols: cols, labels: labels };
+}
+
+function articlesFromXls(bytes) {
+  var streams = readOleStreams(bytes);
+  var book = streams && (streams['Workbook'] || streams['Book']);
+  if (!book) throw new Error('الملف ليس ملف Excel صالحاً');
+
+  var recs = biffRecords(book, 0);
+  var sstChunks = [], sheets = [], inSst = false, i;
+  for (i = 0; i < recs.length; i++) {
+    var t = recs[i].t, d = recs[i].d;
+    if (t === 0x00FC) { sstChunks = [d]; inSst = true; continue; }   /* SST */
+    if (t === 0x003C) { if (inSst) sstChunks.push(d); continue; }    /* CONTINUE */
+    inSst = false;
+    if (t === 0x0085) {                                              /* BOUNDSHEET */
+      sheets.push({ name: biffString(d, 6, true), offset: rdU32(d, 0) });
+    } else if (t === 0x000A && sheets.length) {
+      break;                                                         /* end of globals */
+    }
+  }
+
+  var sst = parseSstStrings(sstChunks);
+  /* The export calls its sheet "Data". Any other name is tried afterwards, so
+     a renamed sheet still imports. */
+  var order = sheets.slice().sort(function (a, b) {
+    return (/^data$/i.test(a.name) ? 0 : 1) - (/^data$/i.test(b.name) ? 0 : 1);
+  });
+  var fallback = null;
+  for (i = 0; i < order.length; i++) {
+    var res = rowsToArticles(parseBiffSheet(book, order[i].offset, sst));
+    res.sheet = order[i].name;
+    if (res.rows.length) return res;
+    if (!fallback) fallback = res;
+  }
+  return fallback || emptyArticleResult();
+}
+
+function articlesFromXlsx(bytes) {
+  var files = zipEntries(bytes);
+  var parser = new DOMParser();
+
+  function part(name) {
+    var e = files[name];
+    if (!e) return Promise.resolve(null);
+    return inflateEntry(e).then(function (b) {
+      return parser.parseFromString(new TextDecoder('utf-8').decode(b), 'application/xml');
+    });
+  }
+  function colOf(ref) {
+    var m = /^([A-Z]+)/.exec(String(ref || '').toUpperCase());
+    if (!m) return -1;
+    var n = 0;
+    for (var i = 0; i < m[1].length; i++) n = n * 26 + (m[1].charCodeAt(i) - 64);
+    return n - 1;
+  }
+  function sheetRows(doc, shared) {
+    var rows = [], rowEls = doc.getElementsByTagName('row');
+    for (var i = 0; i < rowEls.length; i++) {
+      var rIdx = parseInt(rowEls[i].getAttribute('r'), 10);
+      rIdx = (isFinite(rIdx) && rIdx > 0) ? rIdx - 1 : i;
+      var row = rows[rIdx] || (rows[rIdx] = []);
+      var cs = rowEls[i].getElementsByTagName('c');
+      for (var j = 0; j < cs.length; j++) {
+        var col = colOf(cs[j].getAttribute('r'));
+        if (col < 0) col = j;
+        var type = cs[j].getAttribute('t');
+        var vEl = cs[j].getElementsByTagName('v')[0];
+        var raw = vEl ? vEl.textContent : '';
+        var val;
+        if (type === 's') val = shared[parseInt(raw, 10)] || '';
+        else if (type === 'inlineStr') {
+          var is = cs[j].getElementsByTagName('t')[0];
+          val = is ? is.textContent : '';
+        } else if (raw !== '' && isFinite(Number(raw))) val = Number(raw);
+        else val = raw;
+        row[col] = val;
+      }
+    }
+    return rows;
+  }
+
+  return part('xl/sharedStrings.xml').then(function (ssDoc) {
+    var shared = [];
+    if (ssDoc) {
+      var sis = ssDoc.getElementsByTagName('si');
+      for (var i = 0; i < sis.length; i++) {
+        var ts = sis[i].getElementsByTagName('t'), s = '';
+        for (var j = 0; j < ts.length; j++) s += ts[j].textContent || '';
+        shared.push(s);
+      }
+    }
+    return Promise.all([part('xl/workbook.xml'), part('xl/_rels/workbook.xml.rels')])
+      .then(function (res) {
+        var wbDoc = res[0], relDoc = res[1];
+        var rel = {};
+        if (relDoc) {
+          var rs = relDoc.getElementsByTagName('Relationship');
+          for (var i = 0; i < rs.length; i++) {
+            rel[rs[i].getAttribute('Id')] = rs[i].getAttribute('Target');
+          }
+        }
+        var list = [];
+        if (wbDoc) {
+          var sh = wbDoc.getElementsByTagName('sheet');
+          for (var i = 0; i < sh.length; i++) {
+            var target = String(rel[sh[i].getAttribute('r:id') || ''] || '').replace(/^\/+/, '');
+            if (target && target.indexOf('xl/') !== 0) target = 'xl/' + target;
+            list.push({ name: sh[i].getAttribute('name') || '', path: target });
+          }
+        }
+        if (!list.length) {
+          Object.keys(files).forEach(function (n) {
+            if (/^xl\/worksheets\/sheet\d+\.xml$/.test(n)) list.push({ name: n, path: n });
+          });
+        }
+        list.sort(function (a, b) {
+          return (/^data$/i.test(a.name) ? 0 : 1) - (/^data$/i.test(b.name) ? 0 : 1);
+        });
+
+        var fallback = null;
+        function trySheets(i) {
+          if (i >= list.length) return Promise.resolve(null);
+          return part(list[i].path).then(function (doc) {
+            if (doc) {
+              var r = rowsToArticles(sheetRows(doc, shared));
+              r.sheet = list[i].name;
+              if (r.rows.length) return r;
+              if (!fallback) fallback = r;
+            }
+            return trySheets(i + 1);
+          });
+        }
+        return trySheets(0).then(function (found) {
+          return found || fallback || emptyArticleResult();
+        });
+      });
+  });
+}
+
+/* ---- CSV / TSV, and the HTML table some systems export as ".xls" ---- */
+function splitDelimitedLine(line, sep) {
+  var out = [], cur = '', quoted = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else quoted = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === sep) {
+      out.push(cur);
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur);
+  return out;
+}
+
+function articlesFromDelimited(text) {
+  var lines = text.split(/\r\n|\n|\r/).filter(function (l) { return l.trim() !== ''; });
+  /* Excel writes a "sep=;" hint line when the locale uses semicolons. */
+  if (lines.length && /^sep=.$/i.test(lines[0].trim())) lines.shift();
+  if (!lines.length) return emptyArticleResult();
+
+  var seps = [',', '\t', ';'], sep = ',', best = 0;
+  seps.forEach(function (s) {
+    var n = splitDelimitedLine(lines[0], s).length;
+    if (n > best) { best = n; sep = s; }
+  });
+  return rowsToArticles(lines.map(function (l) { return splitDelimitedLine(l, sep); }));
+}
+
+function articlesFromHtmlTable(text) {
+  var doc = new DOMParser().parseFromString(text, 'text/html');
+  var table = doc.querySelector('table');
+  if (!table) return null;
+  var rows = [], trs = table.querySelectorAll('tr');
+  for (var i = 0; i < trs.length; i++) {
+    var cells = trs[i].querySelectorAll('td, th'), row = [];
+    for (var j = 0; j < cells.length; j++) row.push((cells[j].textContent || '').trim());
+    if (row.length) rows.push(row);
+  }
+  return rowsToArticles(rows);
+}
+
+/* The format is decided by the bytes, not by the name: these files are
+   routinely saved under the wrong extension. */
+function readArticleFile(file) {
+  return file.arrayBuffer().then(function (buf) {
+    var bytes = new Uint8Array(buf);
+    if (bytes.length > 8 && rdU32(bytes, 0) === 0xE011CFD0) return articlesFromXls(bytes);
+    if (bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4B) return articlesFromXlsx(bytes);
+    return new TextDecoder('utf-8').decode(bytes).replace(/^\uFEFF/, '');
+  }).then(function (result) {
+    if (typeof result !== 'string') return result;
+    if (/^\s*</.test(result)) {
+      var table = articlesFromHtmlTable(result);
+      if (table && table.rows.length) return table;
+      throw new Error('هذا الملف صفحة ويب وليست جدول Excel — افتحه في Excel واحفظه بصيغة xlsx أو CSV');
+    }
+    var res = articlesFromDelimited(result);
+    if (res.rows.length) return res;
+    throw new Error('ما لقيت عمودَي «Article No.» و«Article» في هذا الملف');
+  });
+}
+
+/* ---- Merging an import into the stored list ----
+   Add the new, update the changed, delete nothing. A row that came from a file
+   is marked `src:'file'` so the built-in seed leaves it alone.
+
+   A row the user corrected by hand is left exactly as it is, and counted so
+   the import can say so out loud. Silently reverting a correction the moment a
+   new export lands would be the worst possible behaviour: the user would have
+   no way of knowing why their fix came undone. */
+function mergeArticles(pairs) {
+  return reqPromise(tx(['articles'], 'readonly').objectStore('articles').getAll())
+    .then(function (existing) {
+      var have = {}, manual = {}, added = 0, updated = 0, skipped = 0;
+      var writes = [], now = Date.now();
+      existing.forEach(function (row) {
+        if (row.src === 'manual') manual[row.no] = true;
+        have[row.no] = row.article;
+      });
+      pairs.forEach(function (p) {
+        if (manual[p.no]) { skipped++; return; }
+        if (!Object.prototype.hasOwnProperty.call(have, p.no)) { added++; writes.push(p); }
+        else if (have[p.no] !== p.article) { updated++; writes.push(p); }
+      });
+      var stat = { added: added, updated: updated, skipped: skipped,
+                   total: existing.length + added };
+      if (!writes.length) return { added: 0, updated: 0, skipped: skipped,
+                                   total: existing.length };
+      return new Promise(function (resolve, reject) {
+        var transaction = tx(['articles'], 'readwrite');
+        var store = transaction.objectStore('articles');
+        writes.forEach(function (p) {
+          store.put({ no: p.no, article: p.article, src: 'file', at: now });
+        });
+        transaction.oncomplete = function () { resolve(stat); };
+        transaction.onerror = function () { reject(transaction.error); };
+        transaction.onabort = function () { reject(transaction.error); };
+      });
+    });
+}
+
+/* The `article` on a product is a snapshot taken when the row was saved, and
+   it is what a backup carries and what search reads. After a new list lands
+   that snapshot can be months out of date, so the rows it disagrees with are
+   rewritten — and only those. */
+function refreshProductArticleNames() {
+  return getAllProducts().then(function (all) {
+    var changed = [];
+    all.forEach(function (p) {
+      if (!p.articleNo) return;
+      var now = articleName(p.articleNo) || '';
+      if (now !== (p.article || '')) { p.article = now; changed.push(p); }
+    });
+    if (!changed.length) return 0;
+    return putManyProducts(changed).then(function () { return changed.length; });
+  });
+}
+
+function importArticleFile(file) {
+  var hint = $('article-import-hint');
+  function say(html) { if (hint) hint.innerHTML = html; }
+  say('جارٍ قراءة الملف…');
+
+  return readArticleFile(file).then(function (res) {
+    if (!res.rows.length) {
+      say('⚠️ ما لقيت صفوفاً فيها رقم الصنف واسمه في هذا الملف.');
+      showToast('الملف ما فيه أصناف');
+      return;
+    }
+    return mergeArticles(res.rows).then(function (stat) {
+      settings.lastArticleImport = Date.now();
+      saveSettings();
+      /* The index is reloaded before the products are refreshed, so the names
+         written onto them come from the list that was just imported. */
+      return loadArticleIndex()
+        .then(function () { return refreshProductArticleNames(); })
+        .then(function (touched) {
+          var parts = ['أُضيف <b>' + stat.added + '</b> · حُدِّث <b>' + stat.updated +
+            '</b> · الإجمالي <b>' + stat.total + '</b>'];
+          if (res.sheet) parts.push('الورقة: ' + esc(res.sheet));
+          if (res.labels[0] || res.labels[1]) {
+            parts.push('الأعمدة: ' + esc(res.labels[0] || '—') + ' / ' + esc(res.labels[1] || '—'));
+          }
+          if (stat.skipped) {
+            parts.push('و<b>' + stat.skipped + '</b> ' +
+              plural(stat.skipped, 'صنف عدّلته يدوياً', 'صنفين عدّلتهما يدوياً', 'أصناف عدّلتها يدوياً') +
+              ' بقي كما هو — الملف ما يتجاوز تعديلك.');
+          }
+          if (!stat.added && !stat.updated) parts.push('لا جديد — القائمة مطابقة لما هو محفوظ.');
+          if (touched) {
+            parts.push('وتم تحديث اسم الصنف على ' + touched + ' ' +
+              plural(touched, 'منتج', 'منتجين', 'منتجات') + '.');
+          }
+          renderArticleImportHint(parts.join('<br>'));
+          showToast('تم استيراد ' + res.rows.length + ' صنف');
+        });
+    });
+  }).catch(function (error) {
+    say('⚠️ تعذّر قراءة الملف: ' + esc(error && error.message ? error.message : String(error)));
+  });
+}
+
+/* ---- Which name a product is shown under -------------------------------
+   Two sources, one switch. "own" is the name typed in (or fetched from the
+   barcode); "article" is the accounting department's official name for the
+   row's article number. Every place a name is drawn — the lists, the details
+   sheet and all three reports — goes through displayName() alone, so the
+   screen and the printout can never disagree. A product with no article
+   number, or one the list has never heard of, falls back to its own name, so
+   the switch can never blank a row. */
+function displayName(p) {
+  if (!p) return '';
+  if (settings.nameSource === 'article') {
+    var official = articleName(p.articleNo) || p.article || '';
+    if (official) return official;
+  }
+  return p.name || '';
+}
+
+function renderNameSource() {
+  var own = $('name-source-own'), art = $('name-source-article');
+  if (!own || !art) return;
+  var onArticle = settings.nameSource === 'article';
+  own.checked = !onArticle;
+  art.checked = onArticle;
 }
 
 function addHistory(entry) {
@@ -1262,7 +2575,7 @@ function productCardHTML(p) {
   return '<div class="product-card" data-action="open-details" data-product-id="' + esc(p.id) + '">' +
       '<div class="product-image">' + image + '</div>' +
       '<div class="product-info">' +
-        '<div class="product-name">' + esc(p.name) + '</div>' +
+        '<div class="product-name">' + esc(displayName(p)) + '</div>' +
         '<div class="product-details">الكمية: <strong>' + esc(formatQty(p.quantity, unitOf(p))) + '</strong> · ينتهي: <strong>' + fmtDate(p.expiryDate) + '</strong>' + locTag + '</div>' +
         '<div class="product-status ' + st.cls + '">' + st.label + ' · ' + dayTxt + '</div>' +
       '</div>' +
@@ -1316,10 +2629,15 @@ function renderProducts(opts) {
     var term = ($('search-input').value || '').trim().toLowerCase();
     var filtered = products.filter(function (p) {
       if (!term) return true;
-      var name = String(p.name || '').toLowerCase();
-      var code = String(p.barcode || '').toLowerCase();
-      var notes = String(p.notes || '').toLowerCase();
-      return name.indexOf(term) !== -1 || code.indexOf(term) !== -1 || notes.indexOf(term) !== -1;
+      /* Everything a row can be recognised by, in one haystack: what the user
+         typed, the barcode, the notes, the article number, the article name as
+         the list has it *now* (the copy stored on the row can be a month behind
+         after a fresh import), and the name it is currently displayed under. */
+      var hay = [
+        p.name, p.barcode, p.notes, p.articleNo, p.article,
+        articleName(p.articleNo), displayName(p)
+      ].join(' ').toLowerCase();
+      return hay.indexOf(term) !== -1;
     });
 
     var sorted = sortProducts(filtered);
@@ -1493,7 +2811,7 @@ function renderWarnings() {
 function warningItemHTML(p) {
   var st = getProductStatus(p.expiryDate, p);
   return '<div class="warn-item' + (st.level === 'expired' ? ' expired' : '') + '" data-action="open-details" data-product-id="' + esc(p.id) + '">' +
-      '<div class="warn-name">' + esc(p.name) + '</div>' +
+      '<div class="warn-name">' + esc(displayName(p)) + '</div>' +
       '<div class="warn-line"><span>الكمية: <strong>' + esc(formatQty(p.quantity, unitOf(p))) + '</strong></span><span>ينتهي: ' + fmtDate(p.expiryDate) + '</span></div>' +
       '<div class="warn-line" style="margin-top:4px"><span class="warn-days">' + daysText(st.daysLeft) + '</span></div>' +
     '</div>';
@@ -1660,7 +2978,13 @@ function renderDetailsBody() {
     galleryHTML(product) + photoTools +
 
     '<div class="form-group" style="margin-top:15px"><label class="form-label">اسم المنتج</label>' +
-      '<div class="info-row">' + esc(product.name) + (product.frozen ? ' ❄️' : '') + '</div></div>' +
+      '<div class="info-row">' + esc(displayName(product)) + (product.frozen ? ' ❄️' : '') + '</div>' +
+      /* When the accounting name is the one on show, the name the user typed is
+         still spelled out here — the switch changes what is displayed, it must
+         never hide what was entered. */
+      (displayName(product) !== (product.name || '')
+        ? '<span class="form-hint" style="text-align:right">الاسم الذي كتبته: ' + esc(product.name || '—') + '</span>'
+        : '') + '</div>' +
 
     '<div class="form-group"><label class="form-label">الكمية الحالية</label>' +
       '<div class="quantity-control">' +
@@ -1690,6 +3014,13 @@ function renderDetailsBody() {
 
     '<div class="form-group"><label class="form-label">رقم الباركود</label>' +
       '<div class="info-row mono">' + (product.barcode ? esc(product.barcode) : 'لا يوجد') + '</div></div>' +
+
+    '<div class="form-group"><label class="form-label">رقم الصنف في المحاسبة</label>' +
+      '<div class="info-row mono">' + (product.articleNo ? esc(product.articleNo) : '—') + '</div>' +
+      (product.article
+        ? '<span class="form-hint" style="text-align:right">' + esc(product.article) + '</span>'
+        : (product.articleNo ? '<span class="form-hint" style="text-align:right">غير موجود في قائمة المحاسبة</span>' : '')) +
+      '</div>' +
 
     '<div class="form-group"><label class="form-label">مكان التخزين</label>' +
       '<div class="info-row">📍 ' + (product.location ? esc(product.location) : 'غير محدد') + '</div></div>' +
@@ -1867,6 +3198,7 @@ function openAddProduct() {
   pendingImages = [];
   $('modal-title').textContent = 'إضافة منتج';
   $('product-name').value = '';
+  $('product-article-no').value = '';
   $('product-quantity').value = '';
   $('product-unit').value = DEFAULT_UNIT;
   $('product-unit').dataset.prevUnit = DEFAULT_UNIT;
@@ -1878,6 +3210,7 @@ function openAddProduct() {
   populateLocationSelect('');
   $('expiry-hint').textContent = '';
   $('barcode-hint').textContent = '';
+  updateArticleHint();
   applyUnitToForm();
   renderFormPhotos();
   openModal('product-modal');
@@ -1892,6 +3225,7 @@ function editProduct() {
     pendingImages = photosOf(product);
     $('modal-title').textContent = 'تعديل المنتج';
     $('product-name').value = product.name || '';
+    $('product-article-no').value = product.articleNo || '';
     $('product-quantity').value = formatAmount(product.quantity, unitOf(product));
     $('product-unit').value = unitOf(product);
     $('product-unit').dataset.prevUnit = unitOf(product);
@@ -1902,6 +3236,7 @@ function editProduct() {
     $('product-frozen').checked = !!product.frozen;
     populateLocationSelect(product.location || '');
     $('barcode-hint').textContent = '';
+    updateArticleHint();
     updateExpiryHint();
     applyUnitToForm();
     renderFormPhotos();
@@ -1929,6 +3264,52 @@ function updateExpiryHint() {
   hint.textContent = 'منتج ' + daysText(daysUntil(value)).replace('باقي', 'يتبقى له');
 }
 
+/* The live answer under the Article No. box: as soon as the typed number is a
+   number the accounting list knows, its name appears — that is the whole point
+   of the feature, so it has to answer while typing, not after saving.
+   A number the list has never heard of is NOT an error. The user may be
+   entering next month's article, and blocking the save would be worse than
+   storing a number with no name attached yet. So the hint says so plainly and
+   moves on. */
+function updateArticleHint() {
+  var hint = $('article-hint');
+  var raw = $('product-article-no').value.trim();
+  if (!hint) return;
+  if (!raw) {
+    hint.style.color = 'var(--gray)';
+    hint.textContent = 'اكتب رقم الصنف ليظهر اسمه في المحاسبة';
+    return;
+  }
+  var name = articleName(raw);
+  if (name) {
+    hint.style.color = 'var(--success, #2E7D32)';
+    hint.textContent = '✓ ' + name;
+  } else if (articleIndex) {
+    hint.style.color = 'var(--gray)';
+    hint.textContent = 'هذا الرقم غير موجود في قائمة المحاسبة — سيُحفظ كما هو';
+  } else {
+    hint.style.color = 'var(--gray)';
+    hint.textContent = '';
+  }
+}
+
+/* Keep the datalist fed from the same index the hint reads, so the two can
+   never disagree about what exists.
+   `value` is the number alone — that is what lands in the field when an option
+   is picked, and the field must hold the number, not a "141010 — Beef Brisket"
+   string. The name rides in `label`, which the datalist shows beside the value
+   in its drop-down. Putting the name in `value` would silently append it to
+   the saved article number. */
+function refreshArticleOptions() {
+  var list = $('article-options');
+  if (!list || !articleIndex) return;
+  var query = $('product-article-no').value.trim();
+  var hits = query ? searchArticles(query) : [];
+  list.innerHTML = hits.map(function (h) {
+    return '<option value="' + esc(h.no) + '" label="' + esc(h.article) + '"></option>';
+  }).join('');
+}
+
 function saveProduct() {
   var name = $('product-name').value.trim();
   var quantityRaw = $('product-quantity').value.trim();
@@ -1936,6 +3317,7 @@ function saveProduct() {
   var entryDate = $('product-entry-date').value;
   var expiryDate = $('product-expiry-date').value;
   var barcode = $('product-barcode').value.trim();
+  var articleNo = $('product-article-no').value.trim();
   var notes = $('product-notes').value.trim();
   var frozen = $('product-frozen').checked;
   var location = $('product-location').value;
@@ -1986,6 +3368,8 @@ function saveProduct() {
       entryDate: entryDate,
       expiryDate: expiryDate,
       barcode: barcode,
+      articleNo: articleNo,
+      article: articleName(articleNo),
       notes: notes,
       frozen: frozen,
       location: location,
@@ -2056,6 +3440,7 @@ function logEditHistory(oldP, newP) {
   if (oldP.entryDate !== newP.entryDate) changes.push('تاريخ الدخول');
   if (oldP.expiryDate !== newP.expiryDate) changes.push('تاريخ الانتهاء');
   if ((oldP.barcode || '') !== (newP.barcode || '')) changes.push('الباركود');
+  if ((oldP.articleNo || '') !== (newP.articleNo || '')) changes.push('رقم الصنف');
   if ((oldP.notes || '') !== (newP.notes || '')) changes.push('الملاحظات');
   if (photosOf(oldP).length !== photosOf(newP).length) changes.push('الصور');
   if (!changes.length) return Promise.resolve();
@@ -2079,7 +3464,7 @@ function deleteCurrentProduct() {
   if (!currentProductId) return Promise.resolve();
   return getProduct(currentProductId).then(function (product) {
     if (!product) { closeModal('details-modal'); return renderProducts(); }
-    if (!confirm('حذف المنتج «' + product.name + '»؟\n\nسيتم حذف سجل حركاته أيضاً.')) return;
+    if (!confirm('حذف المنتج «' + displayName(product) + '»؟\n\nسيتم حذف سجل حركاته أيضاً.')) return;
     return addHistory({
       productId: product.id,
       action: 'حذف المنتج',
@@ -2962,7 +4347,10 @@ function downloadBlob(blob, filename) {
 /* ===== Reports (PDF / Excel / CSV) =====
    All three exports share one column list and one row builder, so they can
    never drift apart. They are English-only by request — no Arabic string may
-   appear in any of them. The "Frozen" column was removed on request. */
+   appear in any of them. The "Frozen" column was removed on request.
+   The Product column reads displayName(), the same function the lists and the
+   details sheet read, so the setting in Settings applies to the printout too
+   and the two can never disagree. */
 var REPORT_HEADERS = ['Product', 'Qty', 'Unit', 'Entry Date', 'Expiry Date',
   'Days Left', 'Status', 'Barcode', 'Location', 'Notes'];
 
@@ -2988,7 +4376,7 @@ function reportRow(p) {
     style: style,
     kind: kind,
     cells: [
-      p.name || '',
+      displayName(p),
       formatAmount(p.quantity, unit),
       unitLabelEn(unit),
       p.entryDate || '',
@@ -3725,6 +5113,11 @@ function handleBackupFile(file) {
 
       var qty = roundQty(Number(p.quantity) || 0, unitInfo(unit).decimals);
       var zero = qty <= 0;
+      /* The article number is carried across as free text. The name beside it
+         is NOT taken from the backup — it is looked up fresh in this device's
+         list, so a backup restored years later shows the current name rather
+         than a stale one, and a number the list does not know keeps its blank. */
+      var articleNo = p.articleNo ? String(p.articleNo).trim() : '';
       var record = {
         id: String(p.id),
         name: String(p.name),
@@ -3733,6 +5126,8 @@ function handleBackupFile(file) {
         entryDate: zero ? '' : (p.entryDate || p.expiryDate),
         expiryDate: zero ? '' : p.expiryDate,
         barcode: p.barcode ? String(p.barcode) : '',
+        articleNo: articleNo,
+        article: articleName(articleNo),
         notes: p.notes ? String(p.notes) : '',
         frozen: !!p.frozen,
         location: p.location || '',
@@ -3800,7 +5195,16 @@ function switchPage(pageId) {
   if (pageId === 'warning-page') renderWarnings();
   if (pageId === 'locations-page') renderLocationPage();
   if (pageId === 'archive-page') renderArchivePage();
-  if (pageId === 'settings-page') { renderAppMeta(); renderLookupHint(); renderArchiveHint(); renderLocations(); }
+  if (pageId === 'settings-page') {
+    renderAppMeta();
+    renderLookupHint();
+    renderArchiveHint();
+    renderLocations();
+    renderArticleImportHint();
+    renderArticleMissing();
+    renderArticleSearch();
+    renderNameSource();
+  }
 }
 
 /* ===================== Archive page =====================
@@ -3845,7 +5249,7 @@ function archiveItemHTML(p) {
       '<div class="loc-thumb">' + thumb +
         (p.frozen ? '<span class="loc-frozen">❄️</span>' : '') + '</div>' +
       '<div class="loc-item-info">' +
-        '<div class="loc-item-name">' + esc(p.name) + '</div>' +
+        '<div class="loc-item-name">' + esc(displayName(p)) + '</div>' +
         '<div class="loc-item-meta">' + meta + '</div>' +
         '<div class="product-status status-archived">في الأرشيف</div>' +
       '</div>' +
@@ -3939,7 +5343,7 @@ function locationItemHTML(p) {
       '<div class="loc-thumb">' + thumb +
         (p.frozen ? '<span class="loc-frozen">❄️</span>' : '') + '</div>' +
       '<div class="loc-item-info">' +
-        '<div class="loc-item-name">' + esc(p.name) + '</div>' +
+        '<div class="loc-item-name">' + esc(displayName(p)) + '</div>' +
         '<div class="loc-item-meta">' + esc(formatQty(p.quantity, unitOf(p))) +
           ' · ينتهي ' + fmtDate(p.expiryDate) + '</div>' +
         '<div class="product-status ' + st.cls + '">' + st.label + '</div>' +
@@ -4053,6 +5457,246 @@ function secondEngineLabel() {
     return '<span style="color:#9B2C22">⚠️ غير متاح — الصيغتان تبقى غير مقروءة<br>' + esc(wasmError) + '</span>';
   }
   return 'يُحمَّل عند أول فتح للماسح';
+}
+
+/* Show how many articles the accounting list holds, and when it was last
+   refreshed from a file. This is the only place the user sees the count,
+   so it is also a quick health check: if the number is 0, something went
+   wrong at boot. `detail` carries the outcome of an import that just ran. */
+function renderArticleImportHint(detail) {
+  var hint = $('article-import-hint');
+  if (!hint) return;
+  var count = articleIndex ? articleIndex.size : 0;
+  var last = settings.lastArticleImport
+    ? 'آخر استيراد: ' + fmtDateTime(settings.lastArticleImport)
+    : 'لم تُستورد قائمة بعد — القائمة الحالية هي القائمة المدمجة مع التطبيق';
+  var manual = countArticleSource('manual');
+  hint.innerHTML = 'الأصناف المحفوظة: <b>' + count + '</b>' +
+    (manual ? ' · منها <b>' + manual + '</b> مُعدَّل يدوياً' : '') +
+    ' · ' + last + (detail ? '<br>' + detail : '');
+}
+
+/* ---- The list, editable from the phone ---------------------------------
+   Two things sit under the import button:
+
+     "أرقام أصناف بلا اسم" — the numbers the products are already using that
+     this list cannot name. Derived from the products on every render, so it
+     appears the moment a product is given an unknown number and disappears
+     the moment that number is named. This is the case that sends the user
+     here: assign an Article No. to a product, open Settings, find it blank,
+     type the name in.
+
+     a search box over every stored row, each one editable — because the
+     department's name can be wrong and the number can change, and neither
+     should need a laptop and a fresh export to fix.
+*/
+
+var ARTICLE_SRC_LABEL = {
+  manual:  'مُعدَّل يدوياً',
+  file:    'من الملف',
+  builtin: 'مدمج مع التطبيق'
+};
+
+/* How many stored rows came from a given place. Counted from the in-memory
+   map rather than the store, so it costs nothing to call while rendering. */
+function countArticleSource(src) {
+  if (!articleRows) return 0;
+  var n = 0;
+  articleRows.forEach(function (row) { if ((row.src || 'builtin') === src) n++; });
+  return n;
+}
+
+function articleBadge(src) {
+  var manual = src === 'manual';
+  return '<span style="font-size:10.5px;padding:1px 7px;border-radius:99px;white-space:nowrap;' +
+    'background:' + (manual ? '#E3F2FD' : '#F1F3F6') + ';' +
+    'color:' + (manual ? 'var(--primary-dark)' : 'var(--gray)') + '">' +
+    esc(ARTICLE_SRC_LABEL[src] || ARTICLE_SRC_LABEL.builtin) + '</span>';
+}
+
+function renderArticleMissing() {
+  var wrap = $('article-missing-wrap');
+  if (!wrap) return;
+  articlesMissingName().then(function (rows) {
+    if (!rows.length) { wrap.innerHTML = ''; return; }
+    wrap.innerHTML =
+      '<div class="divider"></div>' +
+      '<label class="form-label">⚠️ أرقام أصناف بلا اسم (' + rows.length + ')</label>' +
+      '<span class="form-hint" style="margin-top:0;margin-bottom:8px">' +
+        'هذي أرقام مربوطة بمنتجاتك، لكن القائمة ما عندها اسم لها. اضغط على الرقم لتكتب الاسم.' +
+      '</span>' +
+      '<div class="stack" style="gap:8px">' +
+      rows.map(function (r) {
+        return '<button type="button" class="btn btn-outline btn-block" ' +
+          'data-action="edit-article" data-no="' + esc(r.no) + '" ' +
+          'style="display:flex;align-items:center;gap:8px;text-align:start">' +
+          '<span class="mono" style="font-weight:600">' + esc(r.no) + '</span>' +
+          '<span style="flex:1;font-size:11.5px;color:var(--gray);font-weight:400">' +
+            r.products + ' ' + plural(r.products, 'منتج', 'منتجين', 'منتجات') +
+          '</span>' +
+          '<span style="color:var(--primary);font-weight:500">✏️ اكتب الاسم</span>' +
+        '</button>';
+      }).join('') +
+      '</div>';
+  }).catch(function () { wrap.innerHTML = ''; });
+}
+
+/* Every stored row that matches, filtered as the user types. Capped: the list
+   runs to hundreds of rows and the phone only needs the one being fixed. */
+function renderArticleSearch() {
+  var box = $('article-search-results');
+  var field = $('article-search');
+  if (!box || !field || !articleIndex) return;
+  var q = field.value.trim().toLowerCase();
+  if (!q) {
+    box.innerHTML = '<span class="form-hint" style="text-align:center;padding:4px 0">' +
+      'اكتب رقم الصنف أو جزءاً من الاسم للبحث والتعديل.</span>';
+    return;
+  }
+
+  var hits = [];
+  articleIndex.forEach(function (name, no) {
+    if (no.toLowerCase().indexOf(q) === 0 || name.toLowerCase().indexOf(q) !== -1) {
+      hits.push({ no: no, article: name });
+    }
+  });
+  /* Numbers first — a prefix hit on the number is almost always the intent. */
+  hits.sort(function (a, b) {
+    var aPre = a.no.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+    var bPre = b.no.toLowerCase().indexOf(q) === 0 ? 0 : 1;
+    if (aPre !== bPre) return aPre - bPre;
+    return a.no.localeCompare(b.no);
+  });
+
+  if (!hits.length) {
+    box.innerHTML = '<span class="form-hint" style="text-align:center;padding:4px 0">' +
+      'ما فيه صنف مطابق. تقدر تضيفه بزر «إضافة صنف يدوياً».</span>';
+    return;
+  }
+
+  var shown = hits.slice(0, 20);
+  box.innerHTML = shown.map(function (h) {
+    return '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;' +
+      'border:1px solid var(--border);border-radius:10px">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="display:flex;align-items:center;gap:6px">' +
+          '<span class="mono" style="font-size:12px;font-weight:600">' + esc(h.no) + '</span>' +
+          articleBadge(articleSrc(h.no)) +
+        '</div>' +
+        '<div style="font-size:13px;margin-top:2px;overflow:hidden;' +
+          'text-overflow:ellipsis;white-space:nowrap">' + esc(h.article) + '</div>' +
+      '</div>' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-action="edit-article" ' +
+        'data-no="' + esc(h.no) + '" aria-label="تعديل">✏️</button>' +
+    '</div>';
+  }).join('') +
+  (hits.length > shown.length
+    ? '<span class="form-hint" style="text-align:center">وأيضاً ' +
+      (hits.length - shown.length) + ' نتيجة — ضيّق البحث أكثر.</span>'
+    : '');
+}
+
+/* Open the editor on an existing row, or on a blank one. Passing a number with
+   no name is the path from the "بلا اسم" list — that is how a product whose
+   number the list has never heard of gets its name. */
+function openArticleEditor(no, article) {
+  var modal = $('article-modal');
+  if (!modal) return;
+  var editing = no != null && String(no) !== '';
+  $('article-modal-title').textContent = editing ? 'تعديل صنف' : 'إضافة صنف';
+  $('article-no').value = editing ? String(no) : '';
+  $('article-name').value = article || '';
+  $('article-no-hint').textContent = '';
+  $('article-modal-extra').innerHTML = '';
+  modal.dataset.originalNo = editing ? String(no) : '';
+  $('article-delete-btn').style.display = editing ? 'block' : 'none';
+  openModal('article-modal');
+  /* The sheet slides up for 260ms; focusing before it settles makes iOS zoom
+     the page and scroll the field out of view. */
+  setTimeout(function () {
+    (editing ? $('article-name') : $('article-no')).focus();
+  }, 300);
+}
+
+/* Save, then carry the change through to the products.
+
+   When the NUMBER changed the row is re-keyed, and products still pointing at
+   the old number would be left with no name at all. So they are offered the
+   move — offered, not assumed: rewriting the user's rows without asking is
+   worse than a blank name they can see and fix. */
+function saveArticleFromModal() {
+  var modal = $('article-modal');
+  var originalNo = modal.dataset.originalNo || '';
+  var no = $('article-no').value.trim();
+  var article = $('article-name').value.trim();
+
+  if (!no) { showToast('اكتب رقم الصنف (Article No.)'); $('article-no').focus(); return; }
+  if (!article) { showToast('اكتب اسم الصنف (Article)'); $('article-name').focus(); return; }
+
+  var renumbered = !!originalNo && originalNo !== no;
+  if (renumbered && articleIndex && articleIndex.has(no)) {
+    showToast('الرقم ' + no + ' موجود في القائمة بالفعل');
+    return;
+  }
+
+  var proceed = function (moveProducts) {
+    return saveArticleRow(originalNo, no, article)
+      .then(function () { return loadArticleIndex(); })
+      .then(function () {
+        return moveProducts ? moveProductsArticleNo(originalNo, no) : 0;
+      })
+      /* Always refresh afterwards: this also covers products already sitting on
+         the new number, which had no name before this row existed. */
+      .then(function () { return refreshProductArticleNames(); })
+      .then(function (touched) {
+        closeModal('article-modal');
+        renderArticleImportHint();
+        renderArticleMissing();
+        renderArticleSearch();
+        refreshArticleOptions();
+        renderProducts();
+        var msg = !originalNo ? 'تمت إضافة الصنف'
+          : renumbered ? 'تم تعديل الرقم والاسم'
+          : 'تم تعديل الصنف';
+        if (touched) msg += ' · تحدّث ' + touched + ' ' +
+          plural(touched, 'منتج', 'منتجين', 'منتجات');
+        showToast(msg);
+      })
+      .catch(function () { showToast('تعذّر الحفظ'); });
+  };
+
+  if (!renumbered) return proceed(false);
+
+  return countProductsWithArticleNo(originalNo).then(function (n) {
+    if (!n) return proceed(false);
+    var yes = confirm('فيه ' + n + ' ' + plural(n, 'منتج', 'منتجين', 'منتجات') +
+      ' على الرقم القديم ' + originalNo + '.\n\nأنقلهم إلى الرقم الجديد ' + no + '؟' +
+      '\n\n(إن اخترت «إلغاء» يتغيّر الرقم في القائمة فقط، وتظل منتجاتك على الرقم القديم بلا اسم صنف.)');
+    return proceed(yes);
+  }).catch(function () { return proceed(false); });
+}
+
+function deleteArticleFromModal() {
+  var modal = $('article-modal');
+  var no = modal.dataset.originalNo || $('article-no').value.trim();
+  if (!no) return;
+  var extra = isBuiltinArticle(no)
+    ? '\n\n(هذا رقم مدمج مع التطبيق — يرجع تلقائياً عند إعادة التشغيل.)'
+    : '';
+  if (!confirm('حذف الصنف ' + no + ' من قائمة الأصناف؟' + extra)) return;
+  deleteArticleRow(no)
+    .then(function () { return loadArticleIndex(); })
+    .then(function () { return refreshProductArticleNames(); })
+    .then(function () {
+      closeModal('article-modal');
+      renderArticleImportHint();
+      renderArticleMissing();
+      renderArticleSearch();
+      refreshArticleOptions();
+      renderProducts();
+      showToast('تم حذف الصنف');
+    })
+    .catch(function () { showToast('تعذّر الحذف'); });
 }
 
 function renderAppMeta() {
@@ -4191,6 +5835,17 @@ var ACTIONS = {
   'export-csv': function () { exportToCSV(); },
   'export-xlsx': function () { exportToXLSX(); },
   'export-pdf': function () { exportToPDF(); },
+  'import-articles': function () {
+    var input = $('article-import-input');
+    if (input) { input.value = ''; input.click(); }
+  },
+  'add-article': function () { openArticleEditor('', ''); },
+  'edit-article': function (el) {
+    var no = String(el.dataset.no || '');
+    openArticleEditor(no, no && articleIndex ? (articleIndex.get(no) || '') : '');
+  },
+  'save-article': function () { saveArticleFromModal(); },
+  'delete-article': function () { deleteArticleFromModal(); },
   'clear-lookup-cache': function () {
     clearCachedLookups().then(function () {
       renderLookupHint();
@@ -4308,6 +5963,46 @@ function wireUp() {
 
   $('product-expiry-date').addEventListener('change', updateExpiryHint);
   $('product-entry-date').addEventListener('change', updateExpiryHint);
+
+  /* The Article No. box answers twice over: the hint below it names the article
+     the moment the number is recognised, and the datalist offers matches while
+     typing. Both read the same in-memory index. `input` covers the on-screen
+     keyboards that never fire `change` until the field loses focus. */
+  $('product-article-no').addEventListener('input', function () {
+    updateArticleHint();
+    refreshArticleOptions();
+  });
+  $('product-article-no').addEventListener('change', function () {
+    updateArticleHint();
+    refreshArticleOptions();
+  });
+
+  /* The accounting file. The input is hidden and the button opens it, which is
+     the only way to get a file picker that looks like the rest of the app. */
+  $('article-import-input').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    if (file) importArticleFile(file);
+  });
+
+  /* Filtering the stored list as the user types. No debounce: it is a Map
+     lookup per keystroke, not a store read. */
+  $('article-search').addEventListener('input', renderArticleSearch);
+
+  /* Which name products are shown under. Re-rendering the list is the whole
+     point of the switch — the user has to see it take effect. */
+  var nameSourceInputs = document.querySelectorAll('input[name="name-source"]');
+  Array.prototype.forEach.call(nameSourceInputs, function (input) {
+    input.addEventListener('change', function () {
+      if (!input.checked) return;
+      settings.nameSource = input.value;
+      saveSettings();
+      renderNameSource();
+      renderProducts();
+      showToast(settings.nameSource === 'article'
+        ? 'سيظهر المنتج باسم الصنف من المحاسبة'
+        : 'سيظهر المنتج بالاسم الذي كتبته');
+    });
+  });
 
   /* Switching from "Each" to "kg" has to move the field with it: the step and
      the keyboard change, and an amount that no longer makes sense as a whole
@@ -4500,6 +6195,15 @@ function init() {
     requestPersistentStorage();
     registerServiceWorker();
     wireNativeShell();
+    /* Seed the accounting article list, then load it into memory. Awaited
+       before the first product is rendered, because the details sheet reads
+       `product.article` — a name already stored on the row — but the edit
+       sheet resolves the number live, and it must not open against an empty
+       index. Neither step writes anything when the list already matches. */
+    return seedArticles();
+  }).then(function () {
+    return loadArticleIndex();
+  }).then(function () {
     /* One-off: product rows still filed under an old location name. Resolves
        to 0 and writes nothing when there is nothing to rename. */
     return migrateProductLocations();
