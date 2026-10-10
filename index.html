@@ -656,7 +656,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.11.0';
+var APP_VERSION = '2.12.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -4350,14 +4350,27 @@ function downloadBlob(blob, filename) {
    appear in any of them. The "Frozen" column was removed on request.
    The Product column reads displayName(), the same function the lists and the
    details sheet read, so the setting in Settings applies to the printout too
-   and the two can never disagree. */
-var REPORT_HEADERS = ['Product', 'Qty', 'Unit', 'Entry Date', 'Expiry Date',
-  'Days Left', 'Status', 'Barcode', 'Location', 'Notes'];
+   and the two can never disagree.
+
+   Article No. comes FIRST, ahead of the product name, on request: the number
+   is what the supplier and the accounting file are keyed on, so a report read
+   down its left edge leads with the thing you match against.
+   It prints the raw `p.articleNo` — deliberately NOT displayName(). The Product
+   column may already be showing the article's *name* (when the display setting
+   is set to the accounting name), and a report that shows that name twice while
+   the number appears nowhere is worse than useless. */
+var REPORT_HEADERS = ['Article No.', 'Product', 'Qty', 'Unit', 'Entry Date',
+  'Expiry Date', 'Days Left', 'Status', 'Barcode', 'Location', 'Notes'];
 
 /* `cells` lines up with REPORT_HEADERS; `style` is the row highlight, matching
    the app's own colouring (expired = red fill, inside the warning window =
    red text). `daysLeft > 0` deliberately keeps "Expires today" out of the red
    text, which is how the app has always treated it.
+
+   The first cell is the raw article number, and it is left as a STRING even
+   when it looks like a number — an article number of "0012" written as a
+   number becomes 12, exactly the bug the Barcode column already guards
+   against (see XLSX_NUMERIC_COLS).
 
    `kind` is the same decision in words. The HTML and print exports read the
    CSS string; the spreadsheet cannot, because a cell carries a style *id*
@@ -4376,6 +4389,7 @@ function reportRow(p) {
     style: style,
     kind: kind,
     cells: [
+      p.articleNo ? String(p.articleNo).trim() : '',
       displayName(p),
       formatAmount(p.quantity, unit),
       unitLabelEn(unit),
@@ -4556,7 +4570,7 @@ function columnName(index) {
 /* Column widths in Excel's character units, one per REPORT_HEADERS entry.
    Without them Excel uses one uniform width and the product names — the
    longest and most important column — are the first thing cut off. */
-var REPORT_COL_WIDTHS = [30, 8, 8, 13, 13, 10, 15, 16, 18, 24];
+var REPORT_COL_WIDTHS = [14, 26, 8, 8, 13, 13, 10, 15, 16, 18, 24];
 
 /* Style ids, in the order they are declared in xl/styles.xml below. */
 var XLSX_HEADER_STYLE = 1;
@@ -4570,8 +4584,8 @@ var XLSX_EXPIRED_NUMBER_STYLE = 7;
 /* Only these two columns are written as real numbers, so Excel can sum and
    sort them. Every other column stays text: a barcode of "62210311000"
    written as a number would become 6.22103E+13 and lose the digits that
-   make it a barcode. */
-var XLSX_NUMERIC_COLS = [1, 5];
+   make it a barcode — and Article No. is the same hazard, so it is text too. */
+var XLSX_NUMERIC_COLS = [2, 6];
 var XLSX_NUMBER_RE = /^-?\d+(?:\.\d+)?$/;
 
 function xlsxStylesXml() {
@@ -4775,9 +4789,21 @@ var PDF_TITLE_FONT_SIZE = 13;
 /* Column widths as points, one per REPORT_HEADERS entry. Proportional to the
    old HTML report's percentages so the two look the same side by side. The
    last column absorbs the rounding so the table always ends exactly at the
-   right margin. */
+   right margin.
+
+   These are measured, not guessed. A first pass gave Article No. 11% and took
+   the difference off Product — and the render came back with the headers
+   clipped to "Days Lef" and "Expiring soor", because pdfDrawText CLIPS rather
+   than shrinks and the columns no longer held their own headings.
+   A second pass then clipped Location ("General Sto", "Frozen Foo"), so every
+   column is now sized for BOTH its heading and its longest expected value:
+   Status holds "Expiring soon", Location holds the longest default store name
+   ("Chemical Store"), and each gets the 6pt of cell padding on top. Product
+   gives up what is left, since a long product name is the one value that is
+   allowed to run out — and Notes gives up the most, being free text on a
+   printed list. */
 var PDF_COL_WIDTHS = (function () {
-  var pct = [21, 6.5, 5.5, 10, 10, 7, 10, 10.5, 9.5, 10];
+  var pct = [9.6, 19.5, 4.8, 4.8, 9.3, 9.6, 8.2, 10.8, 7.0, 10.8, 5.6];
   var usable = PDF_PAGE_W - PDF_MARGIN_X * 2;
   var widths = pct.map(function (p) { return (usable * p) / 100; });
   var sum = widths.reduce(function (a, b) { return a + b; }, 0);
