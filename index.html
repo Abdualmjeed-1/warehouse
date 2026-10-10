@@ -200,11 +200,11 @@ button,input,select,textarea{font-family:inherit}
 .history-item.archived{background:#FBFCFD;border:1px dashed var(--border)}
 
 /* ---------- Bottom nav ---------- */
-.bottom-nav{display:grid;grid-template-columns:repeat(5,1fr);background:var(--card);border-top:1px solid var(--border);padding-bottom:var(--safe-bottom);flex-shrink:0}
-.nav-item{padding:9px 4px 7px;text-align:center;cursor:pointer;border:none;background:transparent;color:#8A94A0;position:relative;-webkit-appearance:none;appearance:none;touch-action:manipulation}
+.bottom-nav{display:grid;grid-template-columns:repeat(6,1fr);background:var(--card);border-top:1px solid var(--border);padding-bottom:var(--safe-bottom);flex-shrink:0}
+.nav-item{padding:9px 2px 7px;text-align:center;cursor:pointer;border:none;background:transparent;color:#8A94A0;position:relative;-webkit-appearance:none;appearance:none;touch-action:manipulation}
 .nav-item.active{color:var(--primary)}
-.nav-item-icon{font-size:21px;display:block;line-height:1.3}
-.nav-item-label{font-size:10.5px;display:block;font-weight:500}
+.nav-item-icon{font-size:20px;display:block;line-height:1.3}
+.nav-item-label{font-size:9.5px;display:block;font-weight:500;white-space:nowrap}
 .nav-badge{position:absolute;top:4px;left:calc(50% + 6px);min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;line-height:17px;text-align:center;display:none}
 .nav-badge.show{display:block}
 
@@ -225,6 +225,35 @@ button,input,select,textarea{font-family:inherit}
 .loc-item-name{font-size:14px;font-weight:600;color:var(--gray-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .loc-item-meta{font-size:11.5px;color:var(--gray);margin-top:3px;font-variant-numeric:tabular-nums}
 .loc-item-info .product-status{margin-top:5px}
+
+/* ---------- Orders ---------- */
+.orders-list{display:flex;flex-direction:column}
+.order-card{background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;cursor:pointer;transition:transform .12s}
+.order-card:active{transform:scale(.985)}
+.order-card-head{display:flex;align-items:center;gap:11px;padding:13px 14px}
+.order-card-avatar{width:42px;height:42px;flex-shrink:0;border-radius:11px;background:#EEF1F5;display:flex;align-items:center;justify-content:center;font-size:19px}
+.order-card-body{flex:1;min-width:0}
+.order-card-customer{font-size:15px;font-weight:700;color:var(--gray-dark);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order-card-meta{font-size:11.5px;color:var(--gray);margin-top:3px;font-variant-numeric:tabular-nums}
+.order-card-foot{padding:9px 14px;background:#F7F9FC;border-top:1px solid var(--border);font-size:11.5px;color:var(--gray);line-height:1.6}
+.order-badge{font-size:11px;font-weight:700;padding:4px 9px;border-radius:8px;flex-shrink:0;white-space:nowrap}
+.order-badge.open{background:rgba(255,152,0,.16);color:#A55600}
+.order-badge.done{background:rgba(76,175,80,.14);color:#256B2B}
+.order-line{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border)}
+.order-line-info{flex:1;min-width:0}
+.order-line-name{font-size:13.5px;font-weight:600;color:var(--gray-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.order-line-meta{font-size:11px;color:var(--gray);margin-top:2px;font-variant-numeric:tabular-nums}
+.order-qty-input{width:70px;flex-shrink:0;padding:8px 6px;border:1px solid var(--border);border-radius:9px;font-size:15px;text-align:center;background:#FAFBFC;font-variant-numeric:tabular-nums;-webkit-appearance:none;appearance:none;color:#1F2937}
+.order-qty-input:focus{outline:none;border-color:var(--primary);background:#fff}
+.order-unit{font-size:11.5px;color:var(--gray);flex-shrink:0;min-width:34px}
+.pick-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F5F7F9;border-radius:10px;margin-bottom:7px;cursor:pointer}
+.pick-item:active{background:#E9EEF4}
+.pick-item-info{flex:1;min-width:0}
+.pick-item-name{font-size:13.5px;font-weight:600;color:var(--gray-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-item-meta{font-size:11px;color:var(--gray);margin-top:2px;font-variant-numeric:tabular-nums}
+.pick-add{flex-shrink:0;font-size:12.5px;font-weight:700;color:var(--primary)}
+.order-summary{background:#F5F7F9;border-radius:10px;padding:11px 12px;font-size:12.5px;color:#414B57;line-height:1.75}
+.order-summary b{color:var(--gray-dark)}
 
 /* ---------- Modal ---------- */
 .modal{display:none;position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(15,23,42,.5);z-index:1000;align-items:flex-end;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -331,6 +360,32 @@ button,input,select,textarea{font-family:inherit}
         <button class="btn btn-outline" data-action="scan-barcode">📷 مسح باركود</button>
       </div>
       <div class="products-list" id="products-list"></div>
+    </div>
+  </section>
+
+  <section id="orders-page" class="page">
+    <div class="toolbar">
+      <div class="search-row">
+        <div class="search-wrap">
+          <input type="text" id="order-search-input" class="search-input" placeholder="ابحث باسم الطالب أو المنتج أو رقم الصنف أو الباركود..." autocomplete="off" enterkeyhint="search">
+          <button class="search-clear" id="order-search-clear" data-action="clear-order-search" aria-label="مسح البحث">✕</button>
+        </div>
+        <button class="btn btn-primary btn-icon" data-action="scan-order-barcode" aria-label="مسح الباركود">📷</button>
+      </div>
+      <div class="sort-row">
+        <select class="sort-select" id="order-filter-select" aria-label="تصفية الطلبات">
+          <option value="open">قيد التنفيذ</option>
+          <option value="done">المكتملة</option>
+          <option value="all">الكل</option>
+        </select>
+        <span class="count-chip" id="order-count-chip">0 طلب</span>
+      </div>
+    </div>
+    <div class="content">
+      <div class="action-row">
+        <button class="btn btn-primary" data-action="add-order">➕ طلب جديد</button>
+      </div>
+      <div class="orders-list" id="orders-list"></div>
     </div>
   </section>
 
@@ -468,6 +523,10 @@ button,input,select,textarea{font-family:inherit}
   <button class="nav-item active" data-action="switch-page" data-page="home-page">
     <span class="nav-item-icon">🏠</span><span class="nav-item-label">الرئيسية</span>
   </button>
+  <button class="nav-item" data-action="switch-page" data-page="orders-page">
+    <span class="nav-item-icon">🧾</span><span class="nav-item-label">الطلبات</span>
+    <span class="nav-badge" id="orders-nav-badge">0</span>
+  </button>
   <button class="nav-item" data-action="switch-page" data-page="locations-page">
     <span class="nav-item-icon">📍</span><span class="nav-item-label">الموقع</span>
   </button>
@@ -585,6 +644,58 @@ button,input,select,textarea{font-family:inherit}
   </div>
 </div>
 
+<!-- Order editor (new / edit an order) -->
+<div id="order-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 id="order-modal-title" style="font-size:16.5px">طلب جديد</h2>
+      <button class="close-btn" data-action="close-modal" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="order-customer">مين اللي طلب؟ *</label>
+        <input type="text" id="order-customer" class="form-input" placeholder="مثال: مطعم الأصيل" autocomplete="off">
+        <span class="form-hint">يُحفظ مع الطلب، ويُسجَّل تاريخه وساعته ودقيقته تلقائياً عند الحفظ.</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="order-product-search">أضف صنفاً للطلب</label>
+        <div class="input-group">
+          <input type="text" id="order-product-search" class="form-input" placeholder="اكتب الاسم أو رقم الصنف أو الباركود..." autocomplete="off" enterkeyhint="search">
+          <button class="btn btn-outline btn-icon" data-action="scan-order-line" aria-label="مسح الباركود">📷</button>
+        </div>
+        <span class="form-hint">يبحث بالاسم الذي كتبته، وباسم الصنف من المحاسبة، وبرقم الصنف، وبالباركود.</span>
+      </div>
+      <div id="order-pick-results"></div>
+
+      <div class="divider"></div>
+      <div class="form-label" style="margin-bottom:8px">أصناف الطلب <span id="order-lines-count"></span></div>
+      <div id="order-lines"></div>
+
+      <div class="form-group" style="margin-top:13px">
+        <label class="form-label" for="order-note">ملاحظات (اختياري)</label>
+        <input type="text" id="order-note" class="form-input" placeholder="أي ملاحظة على الطلب" autocomplete="off">
+      </div>
+
+      <div class="stack" style="margin-top:15px">
+        <button class="btn btn-primary btn-block" data-action="save-order">💾 حفظ الطلب</button>
+        <button class="btn btn-ghost btn-block" data-action="close-modal">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Order details (lines + the complete-order button) -->
+<div id="order-details-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="font-size:16.5px">تفاصيل الطلب</h2>
+      <button class="close-btn" data-action="close-modal" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="modal-body" id="order-details-body"></div>
+  </div>
+</div>
+
 <!-- Article editor (add / edit a row of the accounting list by hand) -->
 <div id="article-modal" class="modal">
   <div class="modal-content">
@@ -656,7 +767,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.12.0';
+var APP_VERSION = '2.13.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -665,7 +776,11 @@ var DB_NAME = 'WarehouseDB';
 /* v5 adds `articles` — the accounting department's article list, seeded from
    the built-in ARTICLE_LIST. Read once at boot and kept in memory; it is a
    lookup table, not a catalogue, so it is never scanned row by row. */
-var DB_VERSION = 5;
+/* v6 adds `orders`. A customer order is a *list of lines against products*,
+   not a product, so it cannot live in `products` without inventing a second
+   kind of row that every existing screen would then have to filter out. It is
+   its own store, read whole on open like `history`. */
+var DB_VERSION = 6;
 var SETTINGS_KEY = 'tios:settings';
 var ARCHIVE_AFTER_DAYS = 365;
 /* 256 px, not 400. Every thumbnail is stored as a base64 JPEG inside IndexedDB,
@@ -1036,7 +1151,7 @@ var scanCanvas = null;        // offscreen canvas the video frames are drawn int
 var scanCtx = null;
 var scanAttempts = 0;         // used to alternate between crop sizes
 var scanWarned = false;       // log an unexpected decode error only once
-var scannerTarget = 'search'; // 'search' | 'product'
+var scannerTarget = 'search'; // 'search' | 'product' | 'order-line' | 'order-search'
 var scanLock = false;
 var pendingScanCode = null;
 var torchOn = false;          // rear-camera flash, toggled from the scanner
@@ -1143,7 +1258,9 @@ var RENDER_LIMIT = 100;
 var renderLimit = RENDER_LIMIT;
 var visibleProducts = [];     // the sorted+filtered list the "show more" button extends
 var productsCache = null;     // in-memory mirror of the products store, dropped on any write
+var ordersCache = null;       // same idea for the orders store
 var searchTimer = null;       // debounce handle for the search box
+var orderSearchTimer = null;  // and for the orders search box
 var SEARCH_DEBOUNCE_MS = 160; // long enough to skip the intermediate keystrokes, short enough to feel live
 
 /* ===================== Native (Android APK) detection =====================
@@ -1429,6 +1546,14 @@ function openDB() {
          list without touching the code path that reads it. */
       if (!database.objectStoreNames.contains('articles')) {
         database.createObjectStore('articles', { keyPath: 'no' });
+      }
+
+      /* v6. Customer orders. Keyed by our own id, not by the customer name —
+         the same customer orders again next week, and a name is not an
+         identity. No index: the list is short and always read whole, the same
+         way `history` is. */
+      if (!database.objectStoreNames.contains('orders')) {
+        database.createObjectStore('orders', { keyPath: 'id' });
       }
     };
   });
@@ -2412,6 +2537,32 @@ function renderNameSource() {
   art.checked = onArticle;
 }
 
+/* ---- Finding a product by anything it is known by ----------------------
+   The user asked for exactly four ways in: the name they typed, the name the
+   accounting department uses, the accounting number, and the barcode. All four
+   live in one haystack, and BOTH the home search and the order line picker
+   read it from here — so the box that finds a product on the home screen is
+   the same box that finds it inside an order, and the two can never drift
+   into disagreeing about what "matching" means.
+
+   `articleName(p.articleNo)` is the name as the list has it *now*, which is
+   not necessarily the copy stored on the row: after a fresh import from
+   accounting the stored copy can be a month behind. `displayName(p)` is the
+   name the row is currently shown under. */
+function productHaystack(p) {
+  return [
+    p.name, p.barcode, p.notes, p.articleNo, p.article,
+    articleName(p.articleNo), displayName(p)
+  ].join(' ').toLowerCase();
+}
+
+/* An empty term matches everything — a search box with nothing in it is not a
+   search, it is the unfiltered list. */
+function productMatchesTerm(p, term) {
+  if (!term) return true;
+  return productHaystack(p).indexOf(term) !== -1;
+}
+
 function addHistory(entry) {
   return reqPromise(tx(['history'], 'readwrite').objectStore('history').add(entry));
 }
@@ -2432,6 +2583,49 @@ function getArchivedHistoryByProductId(productId) {
 
 function getAllArchivedHistory() {
   return reqPromise(tx(['historyArchive'], 'readonly').objectStore('historyArchive').getAll());
+}
+
+/* ---- Orders -------------------------------------------------------------
+   Read whole and kept in memory, exactly like the product catalogue. An order
+   list is tens of rows, not thousands, and every screen that shows one shows
+   them all — so a cache costs nothing and saves a read per render. */
+function getAllOrders() {
+  return reqPromise(tx(['orders'], 'readonly').objectStore('orders').getAll());
+}
+
+function getAllOrdersCached() {
+  if (ordersCache) return Promise.resolve(ordersCache);
+  return getAllOrders().then(function (rows) {
+    /* Newest first, always — the list is a work queue, and the order that just
+       arrived is the one being looked for. Sorted here rather than at each
+       call site so no screen can forget. */
+    ordersCache = rows.sort(function (a, b) {
+      return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+    });
+    return ordersCache;
+  });
+}
+function invalidateOrders() { ordersCache = null; }
+
+function putOrder(order) {
+  invalidateOrders();
+  return reqPromise(tx(['orders'], 'readwrite').objectStore('orders').put(order));
+}
+function deleteOrderFromDB(id) {
+  invalidateOrders();
+  return reqPromise(tx(['orders'], 'readwrite').objectStore('orders').delete(id));
+}
+function putManyOrders(items) {
+  invalidateOrders();
+  return new Promise(function (resolve, reject) {
+    if (!items.length) return resolve(0);
+    var transaction = tx(['orders'], 'readwrite');
+    var store = transaction.objectStore('orders');
+    items.forEach(function (item) { store.put(item); });
+    transaction.oncomplete = function () { resolve(items.length); };
+    transaction.onerror = function () { reject(transaction.error); };
+    transaction.onabort = function () { reject(transaction.error); };
+  });
 }
 
 /* Move every move older than ARCHIVE_AFTER_DAYS out of the live store.
@@ -2482,11 +2676,13 @@ function clearCachedLookups() {
 
 function clearAllStores() {
   return new Promise(function (resolve, reject) {
-    var transaction = tx(['products', 'history', 'historyArchive', 'lookup'], 'readwrite');
+    var transaction = tx(['products', 'history', 'historyArchive', 'lookup', 'orders'], 'readwrite');
     transaction.objectStore('products').clear();
     transaction.objectStore('history').clear();
     transaction.objectStore('historyArchive').clear();
     transaction.objectStore('lookup').clear();
+    transaction.objectStore('orders').clear();
+    invalidateOrders();
     transaction.oncomplete = function () { resolve(); };
     transaction.onerror = function () { reject(transaction.error); };
     transaction.onabort = function () { reject(transaction.error); };
@@ -2627,18 +2823,7 @@ function renderProducts(opts) {
        not alerted on. They live in their own tab. */
     var products = activeOf(all);
     var term = ($('search-input').value || '').trim().toLowerCase();
-    var filtered = products.filter(function (p) {
-      if (!term) return true;
-      /* Everything a row can be recognised by, in one haystack: what the user
-         typed, the barcode, the notes, the article number, the article name as
-         the list has it *now* (the copy stored on the row can be a month behind
-         after a fresh import), and the name it is currently displayed under. */
-      var hay = [
-        p.name, p.barcode, p.notes, p.articleNo, p.article,
-        articleName(p.articleNo), displayName(p)
-      ].join(' ').toLowerCase();
-      return hay.indexOf(term) !== -1;
-    });
+    var filtered = products.filter(function (p) { return productMatchesTerm(p, term); });
 
     var sorted = sortProducts(filtered);
     var list = $('products-list');
@@ -4205,6 +4390,41 @@ function handleScan(code) {
     return;
   }
 
+  /* Scanning straight onto an order. The barcode names the product; the
+     product goes onto the order being written. Nothing is looked up in the
+     global database — an order line is against stock the warehouse holds, and
+     a product it has never seen cannot be fulfilled. */
+  if (scannerTarget === 'order-line') {
+    closeModal('scanner-modal');
+    if (!orderDraft) { showToast('افتح الطلب أولاً'); return; }
+    return getProductByBarcode(code).then(function (found) {
+      if (!found) { showToast('ما فيه صنف في المخزون بهذا الباركود: ' + code); return; }
+      return addOrderLine(found.id);
+    }).catch(function (e) {
+      console.error(e);
+      showToast('حدث خطأ أثناء البحث');
+    });
+  }
+
+  /* Scanning from the orders tab: the barcode finds the product, and the
+     product finds the order it was ordered on. */
+  if (scannerTarget === 'order-search') {
+    closeModal('scanner-modal');
+    $('order-search-input').value = code;
+    /* A scanned label does not know whether the order is still open, so the
+       filter is widened to everything before searching. */
+    $('order-filter-select').value = 'all';
+    return renderOrdersPage().then(function () {
+      return getAllOrdersCached().then(function (orders) {
+        var hits = orders.filter(function (o) { return orderMatchesTerm(o, String(code).toLowerCase()); });
+        if (hits.length === 1) return openOrderDetails(hits[0].id);
+        showToast(hits.length
+          ? hits.length + ' طلبات فيها هذا الباركود'
+          : 'ما فيه طلب فيه هذا الباركود: ' + code);
+      });
+    });
+  }
+
   getProductByBarcode(code).then(function (found) {
     if (found) {
       closeModal('scanner-modal');
@@ -5060,7 +5280,16 @@ function escXML(s) {
 }
 
 function createBackup(includeImages) {
-  return Promise.all([getAllProducts(), getAllHistory(), getAllArchivedHistory().catch(function () { return []; })])
+  return Promise.all([
+    getAllProducts(),
+    getAllHistory(),
+    getAllArchivedHistory().catch(function () { return []; }),
+    /* A backup that silently left the orders behind would be the worst kind:
+       it looks complete, and the loss is only discovered on the day it is
+       needed. A failure to read them is reported as empty rather than allowed
+       to fail the whole backup. */
+    getAllOrders().catch(function () { return []; })
+  ])
     .then(function (res) {
     var products = res[0];
     /* When includeImages is false, strip base64 image data from each product
@@ -5086,7 +5315,8 @@ function createBackup(includeImages) {
       settings: { warningDays: getWarningDays() },
       products: products,
       history: res[1],
-      historyArchive: res[2]
+      historyArchive: res[2],
+      orders: res[3]
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     downloadBlob(blob, 'warehouse_backup_' + todayISO() + '.json');
@@ -5169,12 +5399,54 @@ function handleBackupFile(file) {
     var history = Array.isArray(payload.history) ? payload.history : [];
     var archived = Array.isArray(payload.historyArchive) ? payload.historyArchive : [];
 
+    /* Orders. A line needs a product id and a positive quantity; a line that
+       has neither is dropped, because it could never be fulfilled and would
+       only fail completion later. Everything else is normalised against the
+       known unit list for the same reason the products path is: a hand-edited
+       backup could name a unit that does not exist, and the number would then
+       be read in one unit and stored in another.
+       An order whose products are gone is KEPT, not dropped — it is a record
+       of what was asked for, and completing it will name the missing lines
+       honestly rather than the order quietly disappearing from the list. */
+    var cleanOrders = (Array.isArray(payload.orders) ? payload.orders : [])
+      .filter(function (o) { return o && o.id; })
+      .map(function (o) {
+        var items = (Array.isArray(o.items) ? o.items : []).filter(function (l) {
+          return l && l.productId && (Number(l.qty) || 0) > 0;
+        }).map(function (l) {
+          var unit = l.unit;
+          for (var j = 0; j < UNITS.length; j++) if (UNITS[j].id === unit) break;
+          if (j === UNITS.length) unit = DEFAULT_UNIT;
+          return {
+            productId: String(l.productId),
+            name: l.name ? String(l.name) : '',
+            articleNo: l.articleNo ? String(l.articleNo).trim() : '',
+            article: l.article ? String(l.article) : '',
+            barcode: l.barcode ? String(l.barcode) : '',
+            unit: unit,
+            qty: roundQty(Number(l.qty) || 0, unitInfo(unit).decimals)
+          };
+        });
+        var done = o.status === 'done';
+        return {
+          id: String(o.id),
+          customer: o.customer ? String(o.customer) : '',
+          note: o.note ? String(o.note) : '',
+          items: items,
+          status: done ? 'done' : 'open',
+          createdAt: Number(o.createdAt) || Date.now(),
+          doneAt: done ? (Number(o.doneAt) || null) : null
+        };
+      });
+
     putManyProducts(clean)
       .then(function () { return putManyHistory(history); })
       .then(function () { return putManyArchivedHistory(archived); })
+      .then(function () { return putManyOrders(cleanOrders); })
       .then(function () {
-        showToast('تمت استعادة ' + clean.length + ' منتج');
-        return renderProducts().then(renderWarnings);
+        showToast('تمت استعادة ' + clean.length + ' منتج' +
+          (cleanOrders.length ? ' و' + cleanOrders.length + ' طلب' : ''));
+        return renderProducts().then(renderWarnings).then(renderOrderBadge);
       })
       .catch(function (error) {
         console.error(error);
@@ -5185,13 +5457,17 @@ function handleBackupFile(file) {
 }
 
 function deleteAllData() {
-  return getAllProducts().then(function (products) {
-    if (!products.length) { showToast('لا توجد بيانات لحذفها'); return; }
-    if (!confirm('حذف جميع البيانات؟\n\nسيتم حذف ' + products.length + ' منتج وكل سجل الحركات نهائياً.')) return;
+  return Promise.all([getAllProducts(), getAllOrders().catch(function () { return []; })])
+    .then(function (res) {
+    var products = res[0];
+    var orders = res[1];
+    if (!products.length && !orders.length) { showToast('لا توجد بيانات لحذفها'); return; }
+    if (!confirm('حذف جميع البيانات؟\n\nسيتم حذف ' + products.length + ' منتج و' +
+        orders.length + ' طلب وكل سجل الحركات نهائياً.')) return;
     if (!confirm('تأكيد أخير: لا يمكن التراجع عن هذه العملية.\n\nهل أنت متأكد؟')) return;
     return clearAllStores().then(function () {
       showToast('تم حذف جميع البيانات');
-      return renderProducts().then(renderWarnings);
+      return renderProducts().then(renderWarnings).then(renderOrderBadge);
     }).catch(function (error) {
       console.error(error);
       showToast('حدث خطأ أثناء الحذف');
@@ -5221,6 +5497,7 @@ function switchPage(pageId) {
   if (pageId === 'warning-page') renderWarnings();
   if (pageId === 'locations-page') renderLocationPage();
   if (pageId === 'archive-page') renderArchivePage();
+  if (pageId === 'orders-page') { renderOrdersPage(); renderOrderBadge(); }
   if (pageId === 'settings-page') {
     renderAppMeta();
     renderLookupHint();
@@ -5280,6 +5557,537 @@ function archiveItemHTML(p) {
         '<div class="product-status status-archived">في الأرشيف</div>' +
       '</div>' +
     '</div>';
+}
+
+/* ===================== Orders =====================
+   A customer sends a list of what they want; the warehouse fulfils it and the
+   quantities come off the shelf. Three things are load-bearing here and are
+   the reason this is more than a shopping list:
+
+     1. A line keeps a COPY of how the product was named when it was added.
+        An order is a historical document — reprinting last month's order must
+        not silently rewrite itself because someone renamed a product or the
+        accounting department re-issued its list. The live product is still
+        found by id when the order is actually fulfilled.
+
+     2. Completing an order is the only operation in the app that destroys
+        something the user cannot get back, so it is atomic and one-shot: the
+        quantities and the 'done' flag are written in the SAME transaction, so
+        a double tap, a replayed button or a retried promise cannot take the
+        stock down twice.
+
+     3. It never invents stock. A line asking for more than is on the shelf
+        stops the whole completion and names the line — rather than forcing the
+        number negative, which would hide a real discrepancy behind a number
+        that looks like every other number.
+*/
+
+var orderDraft = null;          /* the order being edited, before it is saved */
+var editingOrderId = null;      /* '' when the editor is writing a new one   */
+var orderDetailsId = null;      /* which order the details sheet is showing  */
+var orderPickTerm = '';         /* the live product-picker query             */
+
+function newOrderId() {
+  return 'o_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+/* The four things a line is recognised by — the same four the product matcher
+   answers to, so the picker inside an order finds a product exactly the way
+   the home search does. */
+function orderLineHaystack(line) {
+  return [line.name, line.article, line.articleNo, line.barcode].join(' ').toLowerCase();
+}
+
+/* An order matches on who asked for it, on its note, or on ANY product inside
+   it. Searching "141007" has to find the order that contains that article —
+   the question being asked is "which order was that on?", not "what is this
+   product". */
+function orderMatchesTerm(order, term) {
+  if (!term) return true;
+  if ((order.customer || '').toLowerCase().indexOf(term) !== -1) return true;
+  if ((order.note || '').toLowerCase().indexOf(term) !== -1) return true;
+  return (order.items || []).some(function (line) {
+    return orderLineHaystack(line).indexOf(term) !== -1;
+  });
+}
+
+function orderIsDone(order) { return order && order.status === 'done'; }
+
+function orderTotalLines(order) {
+  return (order && order.items ? order.items.length : 0);
+}
+
+/* Kept in the product's own unit. Summing across units is meaningless — a
+   carton and a kilo do not add — so the total is reported per unit. */
+function orderTotalsText(order) {
+  var byUnit = {};
+  (order.items || []).forEach(function (line) {
+    var u = line.unit || DEFAULT_UNIT;
+    byUnit[u] = (byUnit[u] || 0) + (Number(line.qty) || 0);
+  });
+  var keys = Object.keys(byUnit);
+  if (!keys.length) return '—';
+  return keys.map(function (u) {
+    return formatQty(byUnit[u], u);
+  }).join(' · ');
+}
+
+function orderCardHTML(order) {
+  var done = orderIsDone(order);
+  var lines = orderTotalLines(order);
+  var preview = (order.items || []).slice(0, 3).map(function (l) {
+    return displayOrderLineName(l);
+  }).join(' · ');
+  if (lines > 3) preview += ' · +' + (lines - 3);
+
+  return '<div class="order-card" data-action="open-order" data-order-id="' + esc(order.id) + '">' +
+      '<div class="order-card-head">' +
+        '<div class="order-card-avatar">' + (done ? '✅' : '🧾') + '</div>' +
+        '<div class="order-card-body">' +
+          '<div class="order-card-customer">' + esc(order.customer || 'بدون اسم') + '</div>' +
+          '<div class="order-card-meta">🕒 ' + fmtDateTime(order.createdAt) + ' · ' +
+            lines + ' ' + plural(lines, 'صنف', 'صنفان', 'أصناف') + '</div>' +
+        '</div>' +
+        '<span class="order-badge ' + (done ? 'done' : 'open') + '">' +
+          (done ? 'تم' : 'قيد التنفيذ') + '</span>' +
+      '</div>' +
+      '<div class="order-card-foot">' +
+        (preview ? esc(preview) + '<br>' : '') +
+        'الكميات: <b>' + esc(orderTotalsText(order)) + '</b>' +
+        (done && order.doneAt ? ' · أُتمّ ' + fmtDateTime(order.doneAt) : '') +
+      '</div>' +
+    '</div>';
+}
+
+function renderOrdersPage() {
+  var host = $('orders-list');
+  if (!host) return Promise.resolve();
+
+  return getAllOrdersCached().then(function (orders) {
+    var filterEl = $('order-filter-select');
+    var mode = filterEl ? filterEl.value : 'open';
+    var term = ($('order-search-input').value || '').trim().toLowerCase();
+
+    var filtered = orders.filter(function (o) {
+      if (mode === 'open' && orderIsDone(o)) return false;
+      if (mode === 'done' && !orderIsDone(o)) return false;
+      return orderMatchesTerm(o, term);
+    });
+
+    var chip = $('order-count-chip');
+    if (chip) chip.textContent = filtered.length + ' ' + plural(filtered.length, 'طلب', 'طلبان', 'طلبات');
+    var clearBtn = $('order-search-clear');
+    if (clearBtn) clearBtn.classList.toggle('show', !!term);
+
+    if (!filtered.length) {
+      var icon = term ? '🔍' : (mode === 'done' ? '✅' : '🧾');
+      var msg = term
+        ? 'لا توجد طلبات مطابقة لـ «' + esc(term) + '»'
+        : (mode === 'done'
+            ? 'ما فيه طلبات مكتملة بعد.'
+            : 'ما فيه طلبات قيد التنفيذ.<br>ابدأ بطلب جديد.');
+      host.innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + icon +
+        '</div><p>' + msg + '</p></div>';
+      return;
+    }
+
+    host.innerHTML = filtered.map(orderCardHTML).join('');
+  });
+}
+
+/* The number on the tab. Open orders are work still to do, so that is what it
+   counts — a badge that counted finished work would never go away. */
+function renderOrderBadge() {
+  var badge = $('orders-nav-badge');
+  if (!badge) return Promise.resolve();
+  return getAllOrdersCached().then(function (orders) {
+    var open = orders.filter(function (o) { return !orderIsDone(o); }).length;
+    badge.textContent = open;
+    badge.classList.toggle('show', open > 0);
+  });
+}
+
+/* ---- Editor ------------------------------------------------------------ */
+
+function openOrderEditor(order) {
+  editingOrderId = order ? order.id : '';
+  orderDraft = order
+    ? {
+        id: order.id,
+        customer: order.customer || '',
+        note: order.note || '',
+        items: (order.items || []).map(function (l) { return Object.assign({}, l); })
+      }
+    : { id: '', customer: '', note: '', items: [] };
+  orderPickTerm = '';
+
+  $('order-modal-title').textContent = order ? 'تعديل الطلب' : 'طلب جديد';
+  $('order-customer').value = orderDraft.customer;
+  $('order-note').value = orderDraft.note;
+  $('order-product-search').value = '';
+  renderOrderPickResults();
+  renderOrderLines();
+  openModal('order-modal');
+}
+
+function renderOrderLines() {
+  var host = $('order-lines');
+  if (!host) return;
+  var items = orderDraft ? orderDraft.items : [];
+
+  var count = $('order-lines-count');
+  if (count) {
+    count.textContent = items.length
+      ? '(' + items.length + ' ' + plural(items.length, 'صنف', 'صنفان', 'أصناف') + ')'
+      : '';
+    count.style.cssText = 'font-size:12px;color:var(--gray);margin:0';
+  }
+
+  if (!items.length) {
+    host.innerHTML = '<div class="form-hint" style="margin:0">ما أضفت أصنافاً بعد — ابحث فوق وأضف.</div>';
+    return;
+  }
+
+  host.innerHTML = items.map(function (line) {
+    return '<div class="order-line">' +
+        '<div class="order-line-info">' +
+          '<div class="order-line-name">' + esc(displayOrderLineName(line)) + '</div>' +
+          '<div class="order-line-meta">' + esc(orderLineMeta(line)) + '</div>' +
+        '</div>' +
+        '<input type="number" class="order-qty-input" data-action="order-line-qty" ' +
+          'data-product-id="' + esc(line.productId) + '" value="' + esc(String(line.qty)) + '" ' +
+          'min="0" step="' + (unitInfo(line.unit).decimals === 0 ? '1' : '0.01') + '" inputmode="decimal">' +
+        '<span class="order-unit">' + esc(unitLabelEn(line.unit)) + '</span>' +
+        '<button class="btn btn-ghost btn-sm" data-action="remove-order-line" ' +
+          'data-product-id="' + esc(line.productId) + '" aria-label="حذف الصنف">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+function displayOrderLineName(line) {
+  return line.name || line.article || line.articleNo || 'صنف بلا اسم';
+}
+
+function orderLineMeta(line) {
+  var bits = [];
+  if (line.articleNo) bits.push('رقم الصنف ' + line.articleNo);
+  if (line.article) bits.push(line.article);
+  if (line.barcode) bits.push('باركود ' + line.barcode);
+  return bits.join(' · ');
+}
+
+/* The picker. Same matcher as the home search, so a product is found here by
+   exactly the four things it is found by there. Only products on the shelf are
+   offered: an archived row has nothing to give, and putting it on an order
+   would only produce a failure at completion time. */
+function renderOrderPickResults() {
+  var host = $('order-pick-results');
+  if (!host) return Promise.resolve();
+
+  var term = (orderPickTerm || '').trim().toLowerCase();
+  if (!term) { host.innerHTML = ''; return Promise.resolve(); }
+
+  return getAllProductsCached().then(function (all) {
+    var hits = activeOf(all).filter(function (p) { return productMatchesTerm(p, term); }).slice(0, 8);
+    if (!hits.length) {
+      host.innerHTML = '<div class="form-hint" style="margin:0 0 9px">ما لقيت صنفاً مطابقاً في المخزون.</div>';
+      return;
+    }
+    host.innerHTML = hits.map(function (p) {
+      return '<div class="pick-item" data-action="add-order-line" data-product-id="' + esc(p.id) + '">' +
+          '<div class="pick-item-info">' +
+            '<div class="pick-item-name">' + esc(displayName(p)) + '</div>' +
+            '<div class="pick-item-meta">' +
+              (p.articleNo ? 'رقم الصنف ' + esc(String(p.articleNo)) + ' · ' : '') +
+              'المتوفر ' + esc(formatQty(p.quantity, unitOf(p))) +
+            '</div>' +
+          '</div>' +
+          '<span class="pick-add">＋ إضافة</span>' +
+        '</div>';
+    }).join('');
+  });
+}
+
+/* Adding a product that is already on the order raises its quantity instead of
+   writing a second line for it — two lines for the same product is how a
+   deduction ends up applied twice by accident. */
+function addOrderLine(productId) {
+  if (!orderDraft) return Promise.resolve();
+  return getProduct(productId).then(function (p) {
+    if (!p) { showToast('هذا المنتج لم يعد موجوداً'); return; }
+    var existing = orderDraft.items.filter(function (l) { return l.productId === productId; })[0];
+    var step = unitInfo(unitOf(p)).step;
+    if (existing) {
+      existing.qty = roundQty((Number(existing.qty) || 0) + step, unitInfo(existing.unit).decimals);
+    } else {
+      orderDraft.items.push({
+        productId: p.id,
+        name: p.name || '',
+        articleNo: p.articleNo ? String(p.articleNo).trim() : '',
+        article: articleName(p.articleNo) || p.article || '',
+        barcode: p.barcode || '',
+        unit: unitOf(p),
+        qty: step
+      });
+    }
+    /* The search box is deliberately LEFT ALONE, term and results both.
+       Clearing it here would be an asynchronous write to a field the user may
+       already be typing into — the read of the product comes back a moment
+       later, and the clear lands on top of the next search term and silently
+       eats it. Keeping it is also the better behaviour: the usual way to fill
+       an order is one search that matches several products. */
+    renderOrderLines();
+    showToast(existing ? 'تمت زيادة الكمية' : 'تمت إضافة الصنف للطلب');
+  });
+}
+
+function setOrderLineQty(productId, raw) {
+  if (!orderDraft) return;
+  var line = orderDraft.items.filter(function (l) { return l.productId === productId; })[0];
+  if (!line) return;
+  var decimals = unitInfo(line.unit).decimals;
+  var n = Number(String(raw).replace(',', '.'));
+  if (!isFinite(n) || n < 0) n = 0;
+  line.qty = roundQty(n, decimals);
+}
+
+function removeOrderLine(productId) {
+  if (!orderDraft) return;
+  orderDraft.items = orderDraft.items.filter(function (l) { return l.productId !== productId; });
+  renderOrderLines();
+}
+
+function saveOrder() {
+  if (!orderDraft) return Promise.resolve();
+  var customer = $('order-customer').value.trim();
+  if (!customer) { showToast('اكتب اسم اللي طلب'); $('order-customer').focus(); return Promise.resolve(); }
+  if (!orderDraft.items.length) { showToast('أضف صنفاً واحداً على الأقل'); return Promise.resolve(); }
+
+  var bad = orderDraft.items.filter(function (l) { return !(Number(l.qty) > 0); });
+  if (bad.length) {
+    showToast('فيه صنف بكمية صفر — احذفه أو حدّد كمية');
+    return Promise.resolve();
+  }
+
+  var isNew = !editingOrderId;
+  return getAllOrdersCached().then(function (orders) {
+    var existing = isNew ? null : orders.filter(function (o) { return o.id === editingOrderId; })[0];
+    /* A finished order is a record of something that already happened. Editing
+       it would let the document disagree with the stock it already moved. */
+    if (existing && orderIsDone(existing)) {
+      showToast('هذا الطلب مكتمل — ما ينفع تعدّله');
+      return;
+    }
+
+    var record = {
+      id: isNew ? newOrderId() : editingOrderId,
+      customer: customer,
+      note: $('order-note').value.trim(),
+      items: orderDraft.items.map(function (l) { return Object.assign({}, l); }),
+      status: 'open',
+      /* Date, hour and minute are stamped once, here, when the order is first
+         written — and deliberately NOT touched on a later edit, because the
+         time the customer asked is the time that matters. */
+      createdAt: isNew ? Date.now() : (existing ? existing.createdAt : Date.now()),
+      doneAt: null
+    };
+
+    return putOrder(record).then(function () {
+      closeModal('order-modal');
+      orderDraft = null;
+      editingOrderId = null;
+      showToast(isNew ? 'تم حفظ الطلب' : 'تم تحديث الطلب');
+      return renderOrdersPage().then(renderOrderBadge);
+    });
+  });
+}
+
+/* ---- Details + completion ---------------------------------------------- */
+
+function openOrderDetails(orderId) {
+  orderDetailsId = orderId;
+  openModal('order-details-modal');
+  return renderOrderDetails();
+}
+
+function renderOrderDetails() {
+  var host = $('order-details-body');
+  if (!host) return Promise.resolve();
+
+  return getAllOrdersCached().then(function (orders) {
+    var order = orders.filter(function (o) { return o.id === orderDetailsId; })[0];
+    if (!order) {
+      host.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🧾</div>' +
+        '<p>هذا الطلب لم يعد موجوداً.</p></div>';
+      return;
+    }
+    var done = orderIsDone(order);
+
+    var head = '<div class="order-summary" style="margin-bottom:14px">' +
+        '<b>الطالب:</b> ' + esc(order.customer || 'بدون اسم') + '<br>' +
+        '<b>وقت الطلب:</b> ' + fmtDateTime(order.createdAt) + '<br>' +
+        '<b>عدد الأصناف:</b> ' + orderTotalLines(order) + '<br>' +
+        '<b>إجمالي الكميات:</b> ' + esc(orderTotalsText(order)) +
+        (order.note ? '<br><b>ملاحظات:</b> ' + esc(order.note) : '') +
+        (done && order.doneAt ? '<br><b>أُتمّ في:</b> ' + fmtDateTime(order.doneAt) : '') +
+      '</div>';
+
+    var lines = (order.items || []).map(function (line) {
+      return '<div class="order-line">' +
+          '<div class="order-line-info">' +
+            '<div class="order-line-name">' + esc(displayOrderLineName(line)) + '</div>' +
+            '<div class="order-line-meta">' + esc(orderLineMeta(line)) + '</div>' +
+          '</div>' +
+          '<span class="order-unit" style="min-width:auto;font-weight:700;color:var(--gray-dark)">' +
+            esc(formatQty(line.qty, line.unit)) + '</span>' +
+        '</div>';
+    }).join('');
+
+    var buttons = done
+      ? '<div class="order-badge done" style="display:block;text-align:center;padding:11px;margin-top:15px">✅ تم إتمام الطلب وخُصمت الكميات</div>' +
+        '<button class="btn btn-ghost btn-block" style="margin-top:9px" data-action="delete-order" ' +
+          'data-order-id="' + esc(order.id) + '">🗑️ حذف الطلب</button>'
+      : '<div class="stack" style="margin-top:15px">' +
+          '<button class="btn btn-success btn-block" data-action="complete-order" ' +
+            'data-order-id="' + esc(order.id) + '">✅ إتمام الطلب وخصم الكميات</button>' +
+          '<button class="btn btn-outline btn-block" data-action="edit-order" ' +
+            'data-order-id="' + esc(order.id) + '">✏️ تعديل الطلب</button>' +
+          '<button class="btn btn-danger btn-block" data-action="delete-order" ' +
+            'data-order-id="' + esc(order.id) + '">🗑️ حذف الطلب</button>' +
+        '</div>';
+
+    host.innerHTML = head + lines + buttons;
+  });
+}
+
+/* Take the ordered quantities off the shelf.
+
+   All-or-nothing on purpose. If any line cannot be met the whole completion is
+   refused and the offending lines are named — a half-fulfilled order that
+   still says "تم" is worse than a refusal, because the shortage disappears
+   into a record that looks complete. */
+function completeOrder(orderId) {
+  return getAllOrdersCached().then(function (orders) {
+    var order = orders.filter(function (o) { return o.id === orderId; })[0];
+    if (!order) { showToast('هذا الطلب لم يعد موجوداً'); return; }
+    /* The one-shot guard. The flag is the authority, not the button — a stale
+       screen can still fire this, and it must be a no-op. */
+    if (orderIsDone(order)) { showToast('هذا الطلب مكتمل بالفعل'); return; }
+
+    return getAllProductsCached().then(function (all) {
+      var byId = {};
+      all.forEach(function (p) { byId[p.id] = p; });
+
+      var missing = [], short = [], plan = [];
+      order.items.forEach(function (line) {
+        var p = byId[line.productId];
+        if (!p) { missing.push(line); return; }
+        var have = Number(p.quantity) || 0;
+        var want = Number(line.qty) || 0;
+        if (want > have) { short.push({ line: line, have: have }); return; }
+        plan.push({ product: p, line: line, have: have, want: want });
+      });
+
+      if (missing.length || short.length) {
+        var msg = [];
+        if (short.length) {
+          msg.push('الكمية غير كافية:');
+          short.forEach(function (s) {
+            msg.push('• ' + displayOrderLineName(s.line) + ' — مطلوب ' +
+              formatQty(s.line.qty, s.line.unit) + '، المتوفر ' +
+              formatQty(s.have, s.line.unit));
+          });
+        }
+        if (missing.length) {
+          msg.push('أصناف لم تعد موجودة:');
+          missing.forEach(function (l) { msg.push('• ' + displayOrderLineName(l)); });
+        }
+        msg.push('', 'لم يُخصم شيء. عدّل الطلب ثم أتمّه.');
+        alert(msg.join('\n'));
+        showToast('لم يُتمّ الطلب — راجع الكميات');
+        return;
+      }
+
+      var now = Date.now();
+      var updates = plan.map(function (entry) {
+        var copy = Object.assign({}, entry.product);
+        var decimals = unitInfo(unitOf(copy)).decimals;
+        var newQty = roundQty(entry.have - entry.want, decimals);
+        copy.quantity = newQty;
+        /* Crossing zero is what puts a product in the archive, and archiving
+           is what clears the dates — done here, inside the same write, so the
+           row can never be seen holding a quantity of zero with dates still
+           on it. */
+        if (newQty <= 0) {
+          copy.archivedAt = now;
+          copy.entryDate = '';
+          copy.expiryDate = '';
+        }
+        return { copy: copy, oldQty: entry.have, newQty: newQty, line: entry.line };
+      });
+
+      var finished = Object.assign({}, order, { status: 'done', doneAt: now });
+
+      /* One transaction over both stores. This is the guarantee: the stock
+         leaves and the order is marked finished together, or neither happens. */
+      return new Promise(function (resolve, reject) {
+        var transaction = tx(['products', 'orders'], 'readwrite');
+        var products = transaction.objectStore('products');
+        var ordersStore = transaction.objectStore('orders');
+        updates.forEach(function (u) { products.put(u.copy); });
+        ordersStore.put(finished);
+        transaction.oncomplete = function () { resolve(); };
+        transaction.onerror = function () { reject(transaction.error); };
+        transaction.onabort = function () { reject(transaction.error); };
+      }).then(function () {
+        invalidateProducts();
+        invalidateOrders();
+
+        /* Named after the customer and the moment, so "why did this drop by
+           3?" is answered by the product's own history rather than by guesswork. */
+        var entries = updates.map(function (u) {
+          return {
+            productId: u.copy.id,
+            action: 'طلب «' + (finished.customer || 'بدون اسم') + '» — خصم ' +
+              formatQty(u.oldQty - u.newQty, unitOf(u.copy)),
+            oldQty: u.oldQty,
+            newQty: u.newQty,
+            timestamp: now
+          };
+        });
+        return putManyHistory(entries);
+      }).then(function () {
+        var archived = updates.filter(function (u) { return u.newQty <= 0; }).length;
+        showToast('تم إتمام الطلب — خُصمت ' + updates.length + ' صنفاً' +
+          (archived ? '، و' + archived + ' انتقل للأرشيف' : ''));
+        return renderOrderDetails().then(renderOrdersPage).then(renderOrderBadge)
+          .then(renderProducts).then(renderWarnings);
+      });
+    });
+  }).catch(function (error) {
+    console.error(error);
+    showToast('حدث خطأ أثناء إتمام الطلب');
+  });
+}
+
+function deleteOrderById(orderId) {
+  return getAllOrdersCached().then(function (orders) {
+    var order = orders.filter(function (o) { return o.id === orderId; })[0];
+    if (!order) return;
+    if (orderIsDone(order)) {
+      /* Deleting a finished order does not put the stock back — the deduction
+         already happened and its history rows stay. Saying so out loud is the
+         only honest option; silently reversing it would double-count stock. */
+      if (!confirm('هذا الطلب مكتمل وكمياته خُصمت بالفعل.\n\nحذفه يمسح الطلب فقط — لن تُرجَع الكميات إلى الرف.\n\nهل تريد الحذف؟')) return;
+    } else if (!confirm('حذف طلب «' + (order.customer || 'بدون اسم') + '»؟\n\nلم تُخصم أي كميات بعد، فالحذف لا يؤثر على المخزون.')) {
+      return;
+    }
+    return deleteOrderFromDB(orderId).then(function () {
+      closeModal('order-details-modal');
+      showToast('تم حذف الطلب');
+      return renderOrdersPage().then(renderOrderBadge);
+    });
+  });
 }
 
 /* ===================== Locations page =====================
@@ -5794,6 +6602,26 @@ var ACTIONS = {
   'close-modal': function (el) { var m = el.closest('.modal'); if (m) closeModal(m.id); },
   'open-details': function (el) { var id = el.dataset.productId; if (id) openProductDetails(id); },
   'clear-search': function () { cancelSearchDebounce(); $('search-input').value = ''; renderProducts(); },
+
+  /* ---- Orders ---- */
+  'add-order': function () { openOrderEditor(null); },
+  'open-order': function (el) { var id = el.dataset.orderId; if (id) openOrderDetails(id); },
+  'edit-order': function (el) {
+    var id = el.dataset.orderId;
+    closeModal('order-details-modal');
+    return getAllOrdersCached().then(function (orders) {
+      var order = orders.filter(function (o) { return o.id === id; })[0];
+      if (order) openOrderEditor(order);
+    });
+  },
+  'save-order': function () { saveOrder(); },
+  'complete-order': function (el) { completeOrder(el.dataset.orderId); },
+  'delete-order': function (el) { deleteOrderById(el.dataset.orderId); },
+  'add-order-line': function (el) { addOrderLine(el.dataset.productId); },
+  'remove-order-line': function (el) { removeOrderLine(el.dataset.productId); },
+  'clear-order-search': function () { $('order-search-input').value = ''; renderOrdersPage(); },
+  'scan-order-barcode': function () { openScanner('order-search'); },
+  'scan-order-line': function () { openScanner('order-line'); },
   'show-more': function () { showMoreProducts(); },
   'show-archive': function () { showArchivedHistory(); },
   'archive-now': function () { runArchiveSweep(true); },
@@ -5943,6 +6771,10 @@ function cancelSearchDebounce() {
   if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
 }
 
+function cancelOrderSearchDebounce() {
+  if (orderSearchTimer) { clearTimeout(orderSearchTimer); orderSearchTimer = null; }
+}
+
 function wireUp() {
   /* Wait for the typing to stop before rebuilding the list. Filtering a few
      thousand products and re-decoding a hundred thumbnails on every keypress
@@ -5959,6 +6791,34 @@ function wireUp() {
     settings.sortBy = this.value;
     saveSettings();
     renderProducts();
+  });
+
+  /* ---- Orders ---- */
+  $('order-search-input').addEventListener('input', function () {
+    cancelOrderSearchDebounce();
+    orderSearchTimer = setTimeout(function () {
+      orderSearchTimer = null;
+      renderOrdersPage();
+    }, SEARCH_DEBOUNCE_MS);
+  });
+
+  $('order-filter-select').addEventListener('change', function () { renderOrdersPage(); });
+
+  /* The product picker inside the order. Filtering runs on the same debounce as
+     the home search — the list it filters is the same size. */
+  $('order-product-search').addEventListener('input', function () {
+    orderPickTerm = this.value;
+    renderOrderPickResults();
+  });
+
+  /* Quantities are read on `change`, not on `input`: rewriting the field while
+     it is being typed into would fight the keyboard. */
+  $('order-lines').addEventListener('change', function (event) {
+    var el = event.target;
+    if (el && el.dataset && el.dataset.action === 'order-line-qty') {
+      setOrderLineQty(el.dataset.productId, el.value);
+      renderOrderLines();
+    }
   });
 
   $('notif-toggle').addEventListener('change', function () {
@@ -6247,6 +7107,11 @@ function init() {
     return null;
   }).then(function () {
     return renderProducts();
+  }).then(function () {
+    /* The tab badge counts orders still to be fulfilled, so it is drawn on
+       boot rather than only when the orders tab is opened — the whole point
+       is to be visible from wherever the user is. */
+    return renderOrderBadge();
   }).then(function () {
     /* Housekeeping. Deliberately not awaited — the first paint must not wait
        on it, and it does nothing at all when there is nothing to move. */
