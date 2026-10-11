@@ -589,7 +589,7 @@ button,input,select,textarea{font-family:inherit}
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="product-expiry-date">تاريخ الانتهاء *</label>
+        <label class="form-label" for="product-expiry-date">تاريخ الانتهاء <span style="font-weight:400;color:var(--gray)">(اختياري)</span></label>
         <input type="date" id="product-expiry-date" class="form-input">
         <span class="form-hint" id="expiry-hint"></span>
       </div>
@@ -767,7 +767,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.13.0';
+var APP_VERSION = '2.14.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -1415,8 +1415,12 @@ function getProductStatus(expiryDate, product) {
   if (product && isArchived(product)) {
     return { label: 'في الأرشيف', en: 'Archived', cls: 'status-archived', daysLeft: 0, level: 'archived' };
   }
-  /* Only reachable for a product that was put back on the shelf and has not
-     been given a new date yet — archiving is what clears them. */
+  /* The expiry date is optional, so this is an ordinary resting state and not
+     a way-point: stock that carries no date at all — cleaning supplies,
+     hardware, anything bought loose — sits on the shelf like everything else.
+     A product put back from the archive lands here too, until a new date is
+     given. Either way there is no countdown to show, and 0 days must never be
+     rendered as if it expired today. */
   if (!parseDateOnly(expiryDate)) {
     return { label: 'بلا تاريخ انتهاء', en: 'No expiry date', cls: 'status-none', daysLeft: 0, level: 'none' };
   }
@@ -2749,7 +2753,11 @@ function sortProducts(list) {
     copy.sort(function (a, b) { return String(b.id).localeCompare(String(a.id)); });
   } else {
     copy.sort(function (a, b) {
-      var da = daysUntil(a.expiryDate), dbb = daysUntil(b.expiryDate);
+      /* A product with no expiry date never expires, so it belongs at the end
+         of a list sorted by "closest to expiring". `daysUntil('')` is 0, which
+         would otherwise park it among the products expiring today. */
+      var da = a.expiryDate ? daysUntil(a.expiryDate) : Infinity;
+      var dbb = b.expiryDate ? daysUntil(b.expiryDate) : Infinity;
       if (da !== dbb) return da - dbb;
       return String(a.name).localeCompare(String(b.name), 'ar');
     });
@@ -2766,14 +2774,20 @@ function productCardHTML(p) {
       (photos.length > 1 ? '<span class="photo-count">' + photos.length + ' 📷</span>' : '')
     : '📦';
   if (p.frozen) image += '<span style="position:absolute;top:3px;right:3px;font-size:16px;text-shadow:0 1px 2px rgba(0,0,0,.3);z-index:2">❄️</span>';
-  var dayTxt = st.daysLeft < 0 ? Math.abs(st.daysLeft) + ' يوم' : (st.daysLeft === 0 ? 'اليوم' : st.daysLeft + ' يوم');
+  /* A product with no expiry date has no countdown, so the day figure and the
+     "ينتهي" line are dropped rather than zeroed — "0 days" would read as
+     "expires today", which is the opposite of what no date means. */
+  var hasDate = st.level !== 'none';
+  var dayTxt = !hasDate ? ''
+    : (st.daysLeft < 0 ? Math.abs(st.daysLeft) + ' يوم' : (st.daysLeft === 0 ? 'اليوم' : st.daysLeft + ' يوم'));
+  var expiryTxt = hasDate ? ' · ينتهي: <strong>' + fmtDate(p.expiryDate) + '</strong>' : '';
   var locTag = p.location ? ' · 📍 ' + esc(p.location) : '';
   return '<div class="product-card" data-action="open-details" data-product-id="' + esc(p.id) + '">' +
       '<div class="product-image">' + image + '</div>' +
       '<div class="product-info">' +
         '<div class="product-name">' + esc(displayName(p)) + '</div>' +
-        '<div class="product-details">الكمية: <strong>' + esc(formatQty(p.quantity, unitOf(p))) + '</strong> · ينتهي: <strong>' + fmtDate(p.expiryDate) + '</strong>' + locTag + '</div>' +
-        '<div class="product-status ' + st.cls + '">' + st.label + ' · ' + dayTxt + '</div>' +
+        '<div class="product-details">الكمية: <strong>' + esc(formatQty(p.quantity, unitOf(p))) + '</strong>' + expiryTxt + locTag + '</div>' +
+        '<div class="product-status ' + st.cls + '">' + st.label + (dayTxt ? ' · ' + dayTxt : '') + '</div>' +
       '</div>' +
     '</div>';
 }
@@ -3181,7 +3195,8 @@ function renderDetailsBody() {
 
     '<div class="form-group"><label class="form-label">الحالة</label>' +
       '<div class="product-status ' + st.cls + '" style="font-size:13px;padding:6px 12px">' +
-        (isArchived(product) ? 'في الأرشيف — الكمية صفر' : st.label + ' · ' + daysText(st.daysLeft)) +
+        (isArchived(product) ? 'في الأرشيف — الكمية صفر'
+          : (st.level === 'none' ? st.label : st.label + ' · ' + daysText(st.daysLeft))) +
       '</div>' +
       (isArchived(product)
         ? '<span class="form-hint">اضغط ＋ لإعادة المنتج إلى الرف. بعدها حدّد تاريخ الدخول والانتهاء من زر «تعديل».</span>'
@@ -3195,7 +3210,7 @@ function renderDetailsBody() {
           '<div class="info-row">' + fmtDate(product.entryDate) + '</div></div>' +
 
         '<div class="form-group"><label class="form-label">تاريخ الانتهاء</label>' +
-          '<div class="info-row">' + fmtDate(product.expiryDate) + '</div></div>') +
+          '<div class="info-row">' + (product.expiryDate ? fmtDate(product.expiryDate) : 'بلا تاريخ انتهاء') + '</div></div>') +
 
     '<div class="form-group"><label class="form-label">رقم الباركود</label>' +
       '<div class="info-row mono">' + (product.barcode ? esc(product.barcode) : 'لا يوجد') + '</div></div>' +
@@ -3535,8 +3550,11 @@ function saveProduct() {
     expiryDate = '';
   } else {
     if (!entryDate) { showToast('يرجى تحديد تاريخ الدخول'); return Promise.resolve(); }
-    if (!expiryDate) { showToast('يرجى تحديد تاريخ الانتهاء'); return Promise.resolve(); }
-    if (parseDateOnly(expiryDate) < parseDateOnly(entryDate)) {
+    /* The expiry date is optional. Plenty of what sits in a store never had
+       one printed on it, and refusing the save over a field the carton does
+       not carry just teaches the user to type a fake date. The only rule left
+       is that a date which IS given cannot precede the day it came in. */
+    if (expiryDate && parseDateOnly(expiryDate) < parseDateOnly(entryDate)) {
       showToast('تاريخ الانتهاء لا يمكن أن يسبق تاريخ الدخول'); return Promise.resolve();
     }
   }
@@ -4615,7 +4633,9 @@ function reportRow(p) {
       unitLabelEn(unit),
       p.entryDate || '',
       p.expiryDate || '',
-      st.daysLeft,
+      /* No date means no countdown: an empty cell, not a 0 that would read as
+         "expires today" in a column Excel sorts numerically. */
+      st.level === 'none' ? '' : st.daysLeft,
       st.en,
       p.barcode || '',
       p.location || '',
@@ -5347,12 +5367,12 @@ function handleBackupFile(file) {
     var products = Array.isArray(payload) ? payload : payload.products;
     if (!Array.isArray(products)) { showToast('لا توجد منتجات في هذا الملف'); return; }
 
-    /* A row needs a name and an id. It also needs a date *unless* it is an
-       archived one — archiving is what clears the dates, so demanding them
-       here would silently drop every archived product from the restore. */
+    /* A row needs a name and an id, and that is all. The expiry date is
+       optional in the app now, so demanding one here would drop every product
+       that carries no date — while still waving archived rows through, since
+       archiving is what clears the dates in the first place. */
     var clean = products.filter(function (p) {
-      if (!p || !p.id || !p.name) return false;
-      return !!p.expiryDate || (Number(p.quantity) || 0) <= 0;
+      return !!p && !!p.id && !!p.name;
     }).map(function (p) {
       /* Both photo shapes are accepted, because a backup taken before multiple
          photos existed carries `image` and one taken after carries `images`.
@@ -5379,7 +5399,7 @@ function handleBackupFile(file) {
         name: String(p.name),
         quantity: qty,
         unit: unit,
-        entryDate: zero ? '' : (p.entryDate || p.expiryDate),
+        entryDate: zero ? '' : (p.entryDate || p.expiryDate || ''),
         expiryDate: zero ? '' : p.expiryDate,
         barcode: p.barcode ? String(p.barcode) : '',
         articleNo: articleNo,
@@ -6179,7 +6199,7 @@ function locationItemHTML(p) {
       '<div class="loc-item-info">' +
         '<div class="loc-item-name">' + esc(displayName(p)) + '</div>' +
         '<div class="loc-item-meta">' + esc(formatQty(p.quantity, unitOf(p))) +
-          ' · ينتهي ' + fmtDate(p.expiryDate) + '</div>' +
+          (p.expiryDate ? ' · ينتهي ' + fmtDate(p.expiryDate) : '') + '</div>' +
         '<div class="product-status ' + st.cls + '">' + st.label + '</div>' +
       '</div>' +
     '</div>';
