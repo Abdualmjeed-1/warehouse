@@ -767,7 +767,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.15.0';
+var APP_VERSION = '2.15.1';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -5401,6 +5401,38 @@ function oirCellText(ctx, text, x, y, w, opts) {
   ctx.restore();
 }
 
+/* The size a string needs to fit a column. A number cut off by its cell is a
+   number the reader cannot key into the system — worse than a slightly smaller
+   font, and far worse than an ellipsis in a column of digits. Names wrap, so
+   this is only used for the number, the quantity and the unit. */
+function oirFitSize(ctx, text, maxWidth, size, minSize) {
+  var s = size, str = String(text === null || text === undefined ? '' : text);
+  ctx.save();
+  while (s > minSize) {
+    ctx.font = s + 'px ' + PDF_FONT;
+    if (ctx.measureText(str).width <= maxWidth) break;
+    s -= 0.5;
+  }
+  ctx.restore();
+  return s;
+}
+
+/* The baseline that puts a string's INK in the middle of a row.
+   `textBaseline = 'middle'` measures the font's em box, not the letters, so an
+   Arabic word with its deep descenders sits visibly lower than a Latin word in
+   the same row — the numbers looked fine while the names sat on the rule.
+   Measuring the ink is what makes both agree. */
+function oirInkBaseline(ctx, text, font, boxTop, boxH) {
+  var s = String(text === null || text === undefined ? '' : text);
+  ctx.save();
+  ctx.font = font;
+  var m = ctx.measureText(s);
+  ctx.restore();
+  var asc = m.actualBoundingBoxAscent, desc = m.actualBoundingBoxDescent;
+  if (!isFinite(asc) || !isFinite(desc)) return boxTop + boxH / 2 + 3.4;
+  return boxTop + (boxH - (asc + desc)) / 2 + asc;
+}
+
 /* Break a name into as many lines as it needs, capped. A long article name is
    the normal case here — "Paper Roll Large - ( Auto Cut ) Case / 6 Roll" is one
    real row — so the cell grows instead of clipping the words away. */
@@ -5480,31 +5512,68 @@ function oirDate(ts) {
   return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
 }
 
-/* Which stores the goods are coming from. Read from the products rather than
-   from the order, because an order line is a snapshot of how a product was
-   NAMED and not of where it sits — stock is moved between stores after the
-   order is written, and the note has to say where to go and pick it up now.
+/* Everything the sheet needs to know about the products behind an order: the
+   stores the goods come from, and the product rows themselves.
 
-   The snapshot is still the fallback: a restored backup, or a product deleted
-   after the order was raised, leaves the line with no live row to read. */
-function orderSourceLocations(order) {
+   Both are read live rather than off the order line, for the same reason: a
+   line is a snapshot of what was true the day it was added. Stock is moved
+   between stores afterwards, an article number is filled in later, and the
+   accounting list is re-imported with new names. The paper the store signs
+   has to say what is true NOW. The snapshot stays as the fallback for a
+   product that was deleted after the order was raised. */
+function orderPrintContext(order) {
   return getAllProductsCached().then(function (all) {
     var byId = {};
     all.forEach(function (p) { byId[p.id] = p; });
 
-    var seen = {}, out = [];
+    var seen = {}, locations = [];
     (order.items || []).forEach(function (line) {
       var product = byId[line.productId];
       var loc = String((product && product.location) || line.location || '').trim();
       if (!loc || seen[loc]) return;
       seen[loc] = true;
-      out.push(loc);
+      locations.push(loc);
     });
-    return out;
-  }).catch(function () { return []; });
+    return { locations: locations, byId: byId };
+  }).catch(function () { return { locations: [], byId: {} }; });
 }
 
-function buildOrderRequestPDF(order, docNo, locations) {
+/* What one printed line says.
+
+   The number and the name are resolved together, because they are the two
+   halves of the same answer: a line added before the article numbers were
+   imported has neither on it, and printing that line with a blank Number and
+   the typed name is what made the sheet disagree with the app.
+
+   `article` mode takes the accounting name — the live one from the list
+   first, then the copy stored on the line — and falls back to the typed name
+   only when there is no article number to look up, so the switch can never
+   blank a row.
+
+   The QUANTITY and its unit are deliberately NOT taken from the product: a
+   line was ordered as "3 cartons", and reading the product's unit today would
+   silently restate that quantity in pieces. */
+function printOrderLine(line, byId) {
+  var product = byId && byId[line.productId];
+  var articleNo = String((product && product.articleNo) || line.articleNo || '').trim();
+
+  var name;
+  if (settings.nameSource === 'article') {
+    name = articleName(articleNo) || (product && product.article) || line.article || line.name || '';
+  } else {
+    name = (product && product.name) || line.name || line.article || '';
+  }
+  if (!name) name = articleNo || 'صنف بلا اسم';
+
+  return {
+    articleNo: articleNo,
+    name: name,
+    qty: line.qty,
+    unit: line.unit || (product && product.unit) || DEFAULT_UNIT
+  };
+}
+
+function buildOrderRequestPDF(order, docNo, locations, byId) {
   var scale = PDF_SCALE;
   var canvas = document.createElement('canvas');
   canvas.width = Math.round(PDF_PAGE_W * scale);
@@ -5617,8 +5686,12 @@ function buildOrderRequestPDF(order, docNo, locations) {
   var bottomLimit = PDF_PAGE_H - OIR_M - 10;
 
   (order.items || []).forEach(function (line) {
-    var nameLines = oirWrap(ctx, displayOrderLineName(line), cols[1] - 10,
-      '9.5px ' + PDF_FONT, 2);
+    var info = printOrderLine(line, byId);
+
+    /* Three lines, not two: accounting names run long ("CHICKEN BREAST FRESH
+       LOCAL 5 KG CARTON FROZEN HALAL CERTIFIED"), and a name cut after two
+       lines is a name the picker cannot be sure of. The row grows instead. */
+    var nameLines = oirWrap(ctx, info.name, cols[1] - 10, '9.5px ' + PDF_FONT, 3);
     var rowH = Math.max(OIR_ROW_MIN, nameLines.length * OIR_LINE_H + 7);
 
     if (y + rowH > bottomLimit) {
@@ -5639,20 +5712,33 @@ function buildOrderRequestPDF(order, docNo, locations) {
     }
     ctx.restore();
 
-    var mid = y + rowH / 2 + 3.4;
+    var small = '9.5px ' + PDF_FONT;
 
-    oirCellText(ctx, line.articleNo ? String(line.articleNo) : '',
-      colX[0] + 5, mid, cols[0] - 10, { size: 9.5 });
+    var numSize = oirFitSize(ctx, info.articleNo, cols[0] - 10, 9.5, 7);
+    oirCellText(ctx, info.articleNo,
+      colX[0] + 5, oirInkBaseline(ctx, info.articleNo, numSize + 'px ' + PDF_FONT, y, rowH),
+      cols[0] - 10, { size: numSize });
 
-    var artTop = y + (rowH - nameLines.length * OIR_LINE_H) / 2 + 9.5;
+    /* The name block is centred as a whole by its ink box, and each extra
+       line shifts the block up by half a line — a fixed offset cannot do
+       this, because an Arabic name and a Latin one have different heights. */
+    var blockLift = (nameLines.length - 1) * OIR_LINE_H / 2;
+    var firstBase = oirInkBaseline(ctx, nameLines[0], small, y, rowH) - blockLift;
     nameLines.forEach(function (ln, k) {
-      oirCellText(ctx, ln, colX[1] + 5, artTop + k * OIR_LINE_H, cols[1] - 10, { size: 9.5 });
+      oirCellText(ctx, ln, colX[1] + 5, firstBase + k * OIR_LINE_H, cols[1] - 10, { size: 9.5 });
     });
 
-    oirCellText(ctx, formatAmount(line.qty, line.unit), colX[2], mid, cols[2],
-      { bold: true, size: 9.5, align: 'center' });
-    oirCellText(ctx, unitLabelEn(line.unit), colX[3], mid, cols[3],
-      { size: 9.5, align: 'center' });
+    var qtyText = formatAmount(info.qty, info.unit);
+    var qtySize = oirFitSize(ctx, qtyText, cols[2] - 8, 9.5, 7);
+    oirCellText(ctx, qtyText, colX[2],
+      oirInkBaseline(ctx, qtyText, 'bold ' + qtySize + 'px ' + PDF_FONT, y, rowH),
+      cols[2], { bold: true, size: qtySize, align: 'center' });
+
+    var unitText = unitLabelEn(info.unit);
+    var unitSize = oirFitSize(ctx, unitText, cols[3] - 8, 9.5, 7);
+    oirCellText(ctx, unitText, colX[3],
+      oirInkBaseline(ctx, unitText, unitSize + 'px ' + PDF_FONT, y, rowH),
+      cols[3], { size: unitSize, align: 'center' });
 
     y += rowH;
   });
@@ -5699,13 +5785,15 @@ function exportOrderPDF(orderId) {
     return ensureOrderDocNo(order).then(function (docNo) {
       /* JPEG encoding a full A4 page is synchronous and takes a moment on a
          phone, so the toast gets to paint before the work starts. The
-         locations are read from live products so the sheet says where stock
-         is NOW, not where it was when the order was raised. */
+         products are read live, so the sheet says where stock is NOW and
+         which article number it carries — not what the line remembered on
+         the day it was added. */
       showToast('جارٍ تجهيز ملف PDF…');
-      orderSourceLocations(order).then(function (locations) {
+      orderPrintContext(order).then(function (ctx2) {
         setTimeout(function () {
           try {
-            shareOrDownloadPDF(buildOrderRequestPDF(order, docNo, locations),
+            shareOrDownloadPDF(
+              buildOrderRequestPDF(order, docNo, ctx2.locations, ctx2.byId),
               'IssueRequest_' + docNo + '.pdf');
           } catch (err) {
             console.error(err);
@@ -6209,7 +6297,24 @@ function renderOrderLines() {
   }).join('');
 }
 
+/* The name an order line is shown under — and the one the printed issue note
+   carries. It has to answer the SAME question as displayName(), because the
+   setting is one switch for the whole app: picking «اسم الصنف من المحاسبة»
+   and then getting the typed name on the paper the store signs is exactly the
+   disagreement that switch exists to prevent.
+
+   An order line is a snapshot, not a product, so it cannot call displayName()
+   directly — but it carries the article number, which is the key the list is
+   read by. The stored `article` copy is only a fallback: after a fresh import
+   from accounting the live name is newer than the copy taken when the line was
+   added. A line with no article number, or a number the list has never heard
+   of, keeps the typed name — the switch must never blank a row. */
 function displayOrderLineName(line) {
+  if (!line) return '';
+  if (settings.nameSource === 'article') {
+    var official = articleName(line.articleNo) || line.article || '';
+    if (official) return official;
+  }
   return line.name || line.article || line.articleNo || 'صنف بلا اسم';
 }
 
