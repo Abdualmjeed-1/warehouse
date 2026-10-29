@@ -160,7 +160,8 @@ button,input,select,textarea{font-family:inherit}
 .image-preview img{width:100%;height:100%;object-fit:cover;display:block}
 .image-preview span{font-size:34px;opacity:.5}
 .image-actions{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;justify-content:center}
-.image-hero{width:100%;height:190px;background:#EEF1F5;border-radius:11px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--border)}
+.image-hero{position:relative;width:100%;height:190px;background:#EEF1F5;border-radius:11px;display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--border)}
+.image-hero .photo-count,.image-hero .photo-zoom{position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;line-height:1;opacity:1;border-radius:6px;padding:4px 7px;pointer-events:none}
 .image-hero img{width:100%;height:100%;object-fit:cover;display:block}
 .image-hero span{font-size:64px;opacity:.5}
 /* The photo strip in the details sheet. Thumbs are 62 px — big enough to tell
@@ -173,6 +174,36 @@ button,input,select,textarea{font-family:inherit}
 .photo-tools{position:absolute;top:2px;left:2px;display:flex;flex-direction:column;gap:2px}
 .photo-tools button{width:18px;height:18px;border:0;border-radius:5px;background:rgba(0,0,0,.62);color:#fff;font-size:10px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
 .photo-add-row{display:flex;gap:8px;margin-top:9px}
+.image-hero[data-action]{cursor:zoom-in}
+
+/* ---------- Full-screen photo viewer ----------
+   The hero image and every thumbnail open this. It is a plain fixed overlay
+   rather than a modal because the modals behind it (details, product form)
+   must stay exactly where they are when it closes — the viewer is a lens on
+   the sheet, not a new screen.
+   Its z-index must sit ABOVE .modal (1000) because it is always opened from
+   inside one, and below .toast (2000) so its own messages stay readable. */
+.photo-viewer{position:fixed;inset:0;z-index:1500;background:rgba(8,10,12,.96);
+  display:none;flex-direction:column}
+.photo-viewer.active{display:flex}
+.pv-bar{display:flex;align-items:center;justify-content:space-between;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) 16px 6px;color:#fff}
+.pv-counter{font-size:13px;opacity:.85;letter-spacing:.4px;
+  /* "1 / 3" must read 1-then-3. In the RTL bar the spaces around the slash
+     turn it neutral, so the two numbers become separate runs and swap
+     places ("3 / 1"). Pinning the counter to LTR keeps the count honest. */
+  direction:ltr;unicode-bidi:isolate}
+.pv-close{width:36px;height:36px;border:0;border-radius:50%;background:rgba(255,255,255,.16);
+  color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.pv-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:6px}
+.pv-stage img{max-width:100%;max-height:100%;object-fit:contain;display:block;border-radius:6px}
+.pv-tools{display:flex;gap:8px;justify-content:center;
+  padding:10px 14px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.pv-tools button{flex:1;max-width:170px;border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.10);color:#fff;border-radius:11px;padding:11px 8px;
+  font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.pv-tools button:disabled{opacity:.35}
+.pv-tools .pv-primary{background:rgba(255,255,255,.92);color:#111}
 
 /* ---------- Quantity ---------- */
 .quantity-control{display:flex;align-items:center;gap:18px;justify-content:center;margin:6px 0 2px}
@@ -750,8 +781,25 @@ button,input,select,textarea{font-family:inherit}
 </div>
 
 <input type="file" id="photo-camera" accept="image/*" capture="environment" hidden>
-<input type="file" id="photo-library" accept="image/*" hidden>
+<input type="file" id="photo-library" accept="image/*" multiple hidden>
 <input type="file" id="backup-input" accept=".json,application/json" hidden>
+
+<!-- ===== Full-screen photo viewer =====
+     One overlay for every photo in the app: the product's hero image, the
+     thumbnails in the strip, and the working list in the add/edit sheet. -->
+<div class="photo-viewer" id="photo-viewer">
+  <div class="pv-bar">
+    <span class="pv-counter" id="pv-counter"></span>
+    <button type="button" class="pv-close" data-action="viewer-close" aria-label="إغلاق">✕</button>
+  </div>
+  <div class="pv-stage"><img id="pv-img" src="" alt=""></div>
+  <div class="pv-tools">
+    <button type="button" data-action="viewer-prev" aria-label="السابقة">‹ السابقة</button>
+    <button type="button" class="pv-primary" data-action="viewer-cover">⭐ رئيسية</button>
+    <button type="button" data-action="viewer-remove">🗑 حذف</button>
+    <button type="button" data-action="viewer-next" aria-label="التالية">التالية ›</button>
+  </div>
+</div>
 
 <noscript><p style="padding:20px;text-align:center">هذا التطبيق يحتاج تشغيل JavaScript.</p></noscript>
 
@@ -767,7 +815,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.15.1';
+var APP_VERSION = '2.15.2';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -791,6 +839,15 @@ var ARCHIVE_AFTER_DAYS = 365;
    are left alone — they keep working, they are just larger. */
 var IMG_SIZE = 256;
 var IMG_QUALITY = 0.72;
+/* The thumbnail above is what every list and card draws. It is far too small
+   to READ, though — a label photographed at 256 px is a grey smudge when
+   opened full screen — so each photo is stored twice: the square thumbnail in
+   `images` for the lists, and a wider copy in `photos` for the viewer. 1200 px
+   covers the largest phone screen at 3× without making the record heavy
+   (≈120 KB a photo). A product with no `photos` — every product that existed
+   before this — simply opens its thumbnail instead; nothing breaks. */
+var PHOTO_MAX = 1200;
+var PHOTO_QUALITY = 0.75;
 /* Six, not unlimited. Every photo is a base64 JPEG sitting in the same IndexedDB
    record as the product, so the record is read whole on every open of the
    details sheet — a dozen photos would make that read slow for no gain. Six
@@ -1138,8 +1195,12 @@ var db = null;
 var currentEditingId = null;
 var currentProductId = null;
 /* The working photo list while the add/edit sheet is open. Seeded from the
-   record when the sheet opens, written back whole when it is saved. */
+   record when the sheet opens, written back whole when it is saved.
+   `pendingPhotos` runs alongside it, index for index: the big copy of each
+   photo. An empty slot means that photo has no big copy (a thumbnail from a
+   barcode lookup, or a product saved before the viewer existed). */
 var pendingImages = [];
+var pendingPhotos = [];
 /* Which photo the details sheet shows large. View state only — it is never
    stored, so the first photo stays the cover no matter what was last viewed. */
 var viewingPhoto = 0;
@@ -1378,6 +1439,42 @@ function photosOf(product) {
 function coverPhoto(product) {
   var list = photosOf(product);
   return list.length ? list[0] : null;
+}
+
+/* The same photos at viewing size, in the same order as the thumbnails.
+   `photos` is a parallel list, not a second gallery: index 3 of `photos` is
+   the big copy of index 3 of `images`. Products saved before the viewer
+   existed have no `photos` at all, so the thumbnail stands in for its own
+   big copy — the viewer then shows a soft image rather than nothing. */
+function photoFilesOf(product) {
+  var thumbs = photosOf(product);
+  var fulls = (product && Array.isArray(product.photos)) ? product.photos : [];
+  return thumbs.map(function (t, i) { return fulls[i] || t; });
+}
+
+function photoFileAt(product, index) {
+  var fulls = photoFilesOf(product);
+  return fulls[Math.min(Math.max(index, 0), fulls.length - 1)] || null;
+}
+
+/* Reorder / add / delete a photo through ONE operation on a paired list, so
+   the thumbnail and its big copy can never drift apart — a mismatch here would
+   put one product's label on another product's carton. */
+function mutatePhotoPair(product, mutate) {
+  var thumbs = photosOf(product);
+  var fulls = (product && Array.isArray(product.photos)) ? product.photos : [];
+  var pair = thumbs.map(function (t, i) { return { t: t, f: fulls[i] || '' }; });
+  mutate(pair);
+
+  product.images = pair.map(function (x) { return x.t; }).filter(Boolean);
+  delete product.image;               /* one shape only, from here on */
+
+  /* Kept index-for-index, gaps included: an empty slot means "this photo has
+     no big copy", and photoFilesOf() falls back to the thumbnail there. Storing
+     the thumbnail twice would double the record for nothing. */
+  var big = pair.map(function (x) { return x.f || ''; });
+  if (big.some(Boolean)) product.photos = big; else delete product.photos;
+  return product;
 }
 
 function daysText(n) {
@@ -3126,17 +3223,141 @@ function refreshDetails() {
   });
 }
 
+/* ===================== Photo viewer =====================
+   Full screen, one photo at a time, with the two things you actually want
+   while looking at a photo: make this one the cover, or throw it away.
+
+   It is not a modal. The details sheet (or the add/edit sheet) stays open
+   underneath, untouched, and closing the viewer puts the user back exactly
+   where they were — same scroll, same fields. That is also why the sheet is
+   re-rendered on close instead of being rebuilt: only the hero index changes.
+
+   Two sources, one viewer: a saved product reads `photos`/`images` from the
+   database, while the add/edit sheet reads the working lists that have not
+   been saved yet. `mode` is which one is on show. */
+var viewerState = null;
+
+function viewerSources() {
+  if (!viewerState) return [];
+  if (viewerState.mode === 'form') {
+    return pendingImages.map(function (thumb, i) { return pendingPhotos[i] || thumb; });
+  }
+  return detailsState ? photoFilesOf(detailsState.product) : [];
+}
+
+function openPhotoViewer(mode, index) {
+  var wasOpen = viewerState !== null;
+  viewerState = { mode: mode, index: Math.max(0, Number(index) || 0) };
+  if (!viewerSources().length) { viewerState = null; return; }
+  renderPhotoViewer();
+  $('photo-viewer').classList.add('active');
+  if (!wasOpen) history.pushState({ photoViewer: true }, '');   /* back closes it */
+}
+
+function closePhotoViewer(fromPop) {
+  var was = viewerState;
+  $('photo-viewer').classList.remove('active');
+  viewerState = null;
+  if (was && was.mode === 'details' && detailsState) {
+    viewingPhoto = was.index;
+    renderDetailsBody();
+  }
+  if (!fromPop && was) {
+    try { history.back(); } catch (e) { /* no history entry to pop */ }
+  }
+}
+
+function renderPhotoViewer() {
+  if (!viewerState) return;
+  var srcs = viewerSources();
+  if (!srcs.length) { closePhotoViewer(); return; }
+
+  viewerState.index = Math.min(Math.max(viewerState.index, 0), srcs.length - 1);
+  $('pv-img').src = srcs[viewerState.index];
+  $('pv-counter').textContent = srcs.length > 1
+    ? (viewerState.index + 1) + ' / ' + srcs.length
+    : '';
+
+  var many = srcs.length > 1;
+  var prev = document.querySelector('[data-action="viewer-prev"]');
+  var next = document.querySelector('[data-action="viewer-next"]');
+  if (prev) prev.disabled = !many;
+  if (next) next.disabled = !many;
+
+  /* The cover button only means something when this photo is not already the
+     cover — on the first photo it is a no-op that would look broken. */
+  var cover = document.querySelector('[data-action="viewer-cover"]');
+  if (cover) cover.style.visibility = viewerState.index === 0 ? 'hidden' : '';
+}
+
+function viewerStep(delta) {
+  if (!viewerState) return;
+  var n = viewerSources().length;
+  if (n < 2) return;
+  viewerState.index = (viewerState.index + delta + n) % n;
+  renderPhotoViewer();
+}
+
+function viewerMakeCover() {
+  if (!viewerState) return;
+  var i = viewerState.index;
+  if (i === 0) return;
+
+  if (viewerState.mode === 'form') {
+    pendingImages.unshift(pendingImages.splice(i, 1)[0]);
+    pendingPhotos.unshift(pendingPhotos.splice(i, 1)[0]);
+    renderFormPhotos();
+    viewerState.index = 0;
+    renderPhotoViewer();
+    showToast('تم تعيين الصورة رئيسية');
+    return;
+  }
+
+  updateProductPhotos(function (pair) { pair.unshift(pair.splice(i, 1)[0]); }, 'تم تعيين الغلاف')
+    .then(function () { if (viewerState) { viewerState.index = 0; renderPhotoViewer(); } });
+}
+
+function viewerRemove() {
+  if (!viewerState) return;
+  var i = viewerState.index;
+
+  if (viewerState.mode === 'form') {
+    pendingImages.splice(i, 1);
+    pendingPhotos.splice(i, 1);
+    renderFormPhotos();
+    if (!pendingImages.length) { closePhotoViewer(); return; }
+    viewerState.index = Math.min(i, pendingImages.length - 1);
+    renderPhotoViewer();
+    showToast('تم حذف الصورة');
+    return;
+  }
+
+  updateProductPhotos(function (pair) { pair.splice(i, 1); }, 'تم حذف الصورة').then(function () {
+    if (!viewerState) return;
+    if (!viewerSources().length) { closePhotoViewer(); return; }
+    viewerState.index = Math.min(i, viewerSources().length - 1);
+    renderPhotoViewer();
+  });
+}
+
 function galleryHTML(product) {
   var photos = photosOf(product);
   if (!photos.length) return '<div class="image-hero"><span>📦</span></div>';
 
   var index = Math.min(Math.max(viewingPhoto, 0), photos.length - 1);
-  var hero = '<div class="image-hero"><img src="' + esc(photos[index]) + '" alt=""></div>';
+
+  /* The hero opens the same photo big. It draws the THUMBNAIL — the list-sized
+     copy — and the viewer swaps in the full-size one, so the sheet itself stays
+     cheap to open on a phone holding six photos. */
+  var hero = '<div class="image-hero" role="button" data-action="open-photo" data-index="' + index + '">' +
+    '<img src="' + esc(photos[index]) + '" alt="">' +
+    (photos.length > 1 ? '<span class="photo-count">' + (index + 1) + '/' + photos.length + ' ⤢</span>' : '<span class="photo-zoom">⤢</span>') +
+    '</div>';
   if (photos.length === 1) return hero;
 
   var strip = photos.map(function (src, i) {
     return photoThumbHTML(src, i, {
-      removable: true, coverable: true, active: index, viewAction: 'view-photo',
+      removable: true, coverable: true, active: index, viewAction: 'open-photo',
       removeAction: 'remove-detail-photo', coverAction: 'make-detail-cover'
     });
   }).join('');
@@ -3213,7 +3434,18 @@ function renderDetailsBody() {
           '<div class="info-row">' + (product.expiryDate ? fmtDate(product.expiryDate) : 'بلا تاريخ انتهاء') + '</div></div>') +
 
     '<div class="form-group"><label class="form-label">رقم الباركود</label>' +
-      '<div class="info-row mono">' + (product.barcode ? esc(product.barcode) : 'لا يوجد') + '</div></div>' +
+      '<div class="info-row mono">' + (product.barcode ? esc(product.barcode) : 'لا يوجد') + '</div>' +
+      /* A product typed in by hand from the accounting sheet has an article
+         number and a name but no barcode, because there was no label to read
+         at the time. This is where the label gets attached — to THIS product,
+         rather than creating a second one with the same name. */
+      '<div class="photo-add-row">' +
+        '<button class="btn btn-outline btn-sm" data-action="scan-attach-barcode">📷 ' +
+          (product.barcode ? 'تغيير الباركود بالمسح' : 'امسح الباركود وأضفه') + '</button>' +
+      '</div>' +
+      (product.barcode ? '' :
+        '<span class="form-hint" style="text-align:right">يُربط الملصق بهذا المنتج ولا يُنشئ منتجاً ثانياً.</span>') +
+      '</div>' +
 
     '<div class="form-group"><label class="form-label">رقم الصنف في المحاسبة</label>' +
       '<div class="info-row mono">' + (product.articleNo ? esc(product.articleNo) : '—') + '</div>' +
@@ -3240,16 +3472,17 @@ function renderDetailsBody() {
 
 /* Add, remove or reorder a product's photos straight from the details sheet.
    There is no Save button on that sheet, so every change is written at once —
-   a photo the user just took must never be lost by closing the sheet. */
+   a photo the user just took must never be lost by closing the sheet.
+
+   `mutate` receives the PAIRED list (thumbnail + its big copy), not the bare
+   thumbnails, so a reorder moves both together. */
 function updateProductPhotos(mutate, message) {
   if (!currentProductId) return Promise.resolve();
   return getProduct(currentProductId).then(function (product) {
     if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
-    var list = photosOf(product);
-    mutate(list);
-    product.images = list;
-    delete product.image;              /* one shape only, from here on */
-    if (viewingPhoto > list.length - 1) viewingPhoto = list.length - 1;
+    mutatePhotoPair(product, mutate);
+    var count = photosOf(product).length;
+    if (viewingPhoto > count - 1) viewingPhoto = count - 1;
     if (viewingPhoto < 0) viewingPhoto = 0;
     return putProduct(product).then(function () {
       showToast(message);
@@ -3261,16 +3494,16 @@ function updateProductPhotos(mutate, message) {
   });
 }
 
-function addDetailPhoto(dataUrl) {
+function addDetailPhoto(thumb, full) {
   if (!currentProductId) return Promise.resolve();
   return getProduct(currentProductId).then(function (product) {
     if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
-    var list = photosOf(product);
-    if (list.length >= MAX_IMAGES) { showToast('الحد الأقصى ' + MAX_IMAGES + ' صور للمنتج'); return; }
-    list.push(dataUrl);
-    viewingPhoto = list.length - 1;    /* show the one just added */
-    product.images = list;
-    delete product.image;
+    if (photosOf(product).length >= MAX_IMAGES) {
+      showToast('الحد الأقصى ' + MAX_IMAGES + ' صور للمنتج');
+      return;
+    }
+    mutatePhotoPair(product, function (pair) { pair.push({ t: thumb, f: full || '' }); });
+    viewingPhoto = photosOf(product).length - 1;   /* show the one just added */
     return putProduct(product).then(function () {
       showToast('تمت إضافة الصورة');
       return refreshDetails();
@@ -3356,6 +3589,14 @@ function refreshDetailsQuantity(newQty, unitId, direction, step) {
 }
 
 /* ===================== Add / Edit ===================== */
+/* The big copies that belong with the thumbnails, padded to the same length so
+   index i always means the same photo in both lists. */
+function seedPendingPhotos(product) {
+  var thumbs = photosOf(product);
+  var fulls = (product && Array.isArray(product.photos)) ? product.photos : [];
+  return thumbs.map(function (t, i) { return fulls[i] || ''; });
+}
+
 function renderFormPhotos() {
   var strip = $('form-photos');
   if (!strip) return;
@@ -3363,7 +3604,7 @@ function renderFormPhotos() {
   strip.innerHTML = pendingImages.length
     ? pendingImages.map(function (src, i) {
         return photoThumbHTML(src, i, {
-          removable: true, coverable: true,
+          removable: true, coverable: true, viewAction: 'open-form-photo',
           removeAction: 'remove-photo', coverAction: 'make-cover'
         });
       }).join('')
@@ -3396,6 +3637,7 @@ function buildUnitOptions() {
 function openAddProduct() {
   currentEditingId = null;
   pendingImages = [];
+  pendingPhotos = [];
   $('modal-title').textContent = 'إضافة منتج';
   $('product-name').value = '';
   $('product-article-no').value = '';
@@ -3423,6 +3665,7 @@ function editProduct() {
     if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
     currentEditingId = id;
     pendingImages = photosOf(product);
+    pendingPhotos = seedPendingPhotos(product);
     $('modal-title').textContent = 'تعديل المنتج';
     $('product-name').value = product.name || '';
     $('product-article-no').value = product.articleNo || '';
@@ -3576,7 +3819,10 @@ function saveProduct() {
       notes: notes,
       frozen: frozen,
       location: location,
-      images: pendingImages.slice()
+      images: pendingImages.slice(),
+      /* Index-for-index with `images`. Dropped entirely when no photo has a big
+         copy, so a product that never used the viewer keeps the old shape. */
+      photos: pendingPhotos.slice()
     };
 
     if (currentEditingId) {
@@ -3707,24 +3953,50 @@ function photoDestination() {
   return 'form';
 }
 
+/* One pick can carry several photos now (`multiple` on the library input), so
+   the whole list is walked rather than only files[0]. They are processed one
+   after another, not in parallel: each one decodes and re-encodes a full-size
+   image, and six at once is how a phone runs out of memory mid-save. */
+function handlePhotoFiles(files) {
+  var list = Array.prototype.slice.call(files || []).filter(Boolean);
+  if (!list.length) return Promise.resolve();
+
+  var destination = photoDestination();
+  var room = MAX_IMAGES - (destination === 'form' ? pendingImages.length : 0);
+  if (room <= 0) {
+    showToast('الحد الأقصى ' + MAX_IMAGES + ' صور للمنتج');
+    return Promise.resolve();
+  }
+  var take = list.slice(0, room);
+  var skipped = list.length - take.length;
+
+  showToast(take.length > 1 ? 'جارٍ معالجة ' + take.length + ' صور…' : 'جارٍ معالجة الصورة…');
+
+  return take.reduce(function (chain, file) {
+    return chain.then(function () { return handlePhotoFile(file); });
+  }, Promise.resolve()).then(function () {
+    if (skipped > 0) showToast('أُضيفت ' + take.length + ' — والباقي تجاوز الحد (' + MAX_IMAGES + ')');
+  });
+}
+
 function handlePhotoFile(file) {
-  if (!file) return;
-  if (!/^image\//.test(file.type)) { showToast('الملف المختار ليس صورة'); return; }
-  if (file.size > 30 * 1024 * 1024) { showToast('الصورة كبيرة جداً (أكثر من 30 ميجابايت)'); return; }
+  if (!file) return Promise.resolve();
+  if (!/^image\//.test(file.type)) { showToast('الملف المختار ليس صورة'); return Promise.resolve(); }
+  if (file.size > 30 * 1024 * 1024) { showToast('الصورة كبيرة جداً (أكثر من 30 ميجابايت)'); return Promise.resolve(); }
 
   var destination = photoDestination();
   if (destination === 'form' && pendingImages.length >= MAX_IMAGES) {
     showToast('الحد الأقصى ' + MAX_IMAGES + ' صور للمنتج');
-    return;
+    return Promise.resolve();
   }
-  showToast('جارٍ معالجة الصورة…');
 
-  makeThumbnail(file).then(function (dataUrl) {
+  return makePhoto(file).then(function (photo) {
     /* The user's own photo always wins over a photo that a lookup is still
        fetching in the background. */
     lookupImageToken++;
-    if (destination === 'details') return addDetailPhoto(dataUrl);
-    pendingImages.push(dataUrl);
+    if (destination === 'details') return addDetailPhoto(photo.thumb, photo.full);
+    pendingImages.push(photo.thumb);
+    pendingPhotos.push(photo.full);
     renderFormPhotos();
     showToast('تمت إضافة الصورة');
   }).catch(function (err) {
@@ -3733,21 +4005,35 @@ function handlePhotoFile(file) {
   });
 }
 
-function makeThumbnail(file) {
+/* Two renditions of the same file, in one decode:
+   `thumb` is the square 256 px the lists draw, `full` is the same photo at up
+   to 1200 px for the viewer — uncropped, so what is opened is what was shot. */
+function makePhoto(file) {
   return new Promise(function (resolve, reject) {
     var finish = function (source, width, height) {
       try {
         var side = Math.min(width, height);
-        var sx = (width - side) / 2;
-        var sy = (height - side) / 2;
-        var canvas = document.createElement('canvas');
-        canvas.width = IMG_SIZE;
-        canvas.height = IMG_SIZE;
-        var ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE);
-        ctx.drawImage(source, sx, sy, side, side, 0, 0, IMG_SIZE, IMG_SIZE);
-        resolve(canvas.toDataURL('image/jpeg', IMG_QUALITY));
+        var thumbCanvas = document.createElement('canvas');
+        thumbCanvas.width = IMG_SIZE;
+        thumbCanvas.height = IMG_SIZE;
+        var tctx = thumbCanvas.getContext('2d');
+        tctx.fillStyle = '#FFFFFF';
+        tctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE);
+        tctx.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, IMG_SIZE, IMG_SIZE);
+
+        var scale = Math.min(1, PHOTO_MAX / Math.max(width, height));
+        var fullCanvas = document.createElement('canvas');
+        fullCanvas.width = Math.max(1, Math.round(width * scale));
+        fullCanvas.height = Math.max(1, Math.round(height * scale));
+        var fctx = fullCanvas.getContext('2d');
+        fctx.fillStyle = '#FFFFFF';
+        fctx.fillRect(0, 0, fullCanvas.width, fullCanvas.height);
+        fctx.drawImage(source, 0, 0, fullCanvas.width, fullCanvas.height);
+
+        resolve({
+          thumb: thumbCanvas.toDataURL('image/jpeg', IMG_QUALITY),
+          full: fullCanvas.toDataURL('image/jpeg', PHOTO_QUALITY)
+        });
       } catch (e) { reject(e); }
     };
 
@@ -4021,6 +4307,7 @@ function applyLookupImage(url) {
       if (photoDestination() !== 'form') return;
       if (pendingImages.length >= MAX_IMAGES) return;
       pendingImages.push(dataUrl);
+      pendingPhotos.push('');       /* a lookup image is only ever a thumbnail */
       renderFormPhotos();
     })
     .catch(function (error) { console.warn('lookup image failed', error); });
@@ -4412,6 +4699,15 @@ function handleScan(code) {
      product goes onto the order being written. Nothing is looked up in the
      global database — an order line is against stock the warehouse holds, and
      a product it has never seen cannot be fulfilled. */
+  /* Scanning a label for a product that is already on the shelf: the code is
+     written onto that product. Nothing is created, nothing is looked up — the
+     answer to "which row does this label belong to" was given before the
+     camera opened. */
+  if (scannerTarget === 'attach-barcode') {
+    closeModal('scanner-modal');
+    return attachBarcodeToProduct(code, currentProductId);
+  }
+
   if (scannerTarget === 'order-line') {
     closeModal('scanner-modal');
     if (!orderDraft) { showToast('افتح الطلب أولاً'); return; }
@@ -4454,6 +4750,98 @@ function handleScan(code) {
   }).catch(function (e) {
     console.error(e);
     setScannerStatus('حدث خطأ أثناء البحث', true);
+  });
+}
+
+/* Give a barcode to a product that already exists.
+
+   The one thing this must never do is create a second row for the same carton:
+   the code is checked against every product first, and a hit on a DIFFERENT
+   product is refused with that product's name, so the user learns which row
+   already owns the label instead of ending up with two. */
+function attachBarcodeToProduct(code, productId) {
+  var value = String(code || '').trim();
+  if (!value) return Promise.resolve();
+  if (!productId) { showToast('افتح المنتج أولاً'); return Promise.resolve(); }
+
+  return getProductByBarcode(value).then(function (found) {
+    if (found && found.id !== productId) {
+      showToast('هذا الباركود مسجّل على: ' + displayName(found));
+      return;
+    }
+    return getProduct(productId).then(function (product) {
+      if (!product) { showToast('هذا المنتج لم يعد موجوداً'); return; }
+      if ((product.barcode || '') === value) {
+        showToast('هذا الباركود مسجّل على المنتج نفسه');
+        return;
+      }
+      var before = product.barcode || '';
+      product.barcode = value;
+      return putProduct(product).then(function () {
+        return addHistory({
+          productId: productId,
+          action: 'الباركود ' + (before ? before + ' ← ' + value : '← ' + value),
+          oldQty: Number(product.quantity) || 0,
+          newQty: Number(product.quantity) || 0,
+          timestamp: Date.now()
+        });
+      }).then(function () {
+        showToast('تم ربط الباركود بالمنتج');
+        if (detailsState && currentProductId === productId) return refreshDetails();
+      });
+    });
+  }).catch(function (error) {
+    console.error(error);
+    showToast('تعذّر حفظ الباركود');
+  });
+}
+
+/* "Not found" is not the same as "not here". This lists what IS in stock so the
+   scanned label can be attached to the row that was typed in from accounting
+   before any label existed. */
+function renderScanLinkPicker() {
+  $('scanner-result').innerHTML =
+    '<div class="scan-result">' +
+      'اختر المنتج الذي تريد ربط هذا الباركود به:' +
+      '<span class="code">' + esc(pendingScanCode || '') + '</span>' +
+      '<input type="text" id="scan-link-search" class="form-input" placeholder="ابحث بالاسم أو رقم الصنف…" ' +
+        'autocomplete="off" style="margin:10px 0 6px">' +
+      '<div id="scan-link-results" style="max-height:220px;overflow-y:auto;text-align:right"></div>' +
+    '</div>';
+
+  var box = $('scan-link-search');
+  if (box) {
+    box.addEventListener('input', function () { renderScanLinkResults(this.value); });
+    box.focus();
+  }
+  renderScanLinkResults('');
+}
+
+function renderScanLinkResults(term) {
+  var host = $('scan-link-results');
+  if (!host) return;
+  var t = String(term || '').trim().toLowerCase();
+
+  getAllProductsCached().then(function (all) {
+    var hits = activeOf(all).filter(function (p) {
+      return !t || productMatchesTerm(p, t);
+    }).slice(0, 10);
+
+    host.innerHTML = hits.length
+      ? hits.map(function (p) {
+          var meta = [];
+          if (p.articleNo) meta.push('رقم الصنف ' + p.articleNo);
+          if (p.barcode) meta.push('باركود ' + p.barcode);
+          return '<div class="pick-item" data-action="scan-link-to" data-product-id="' + esc(p.id) + '">' +
+              '<div class="pick-item-info">' +
+                '<div class="pick-item-name">' + esc(displayName(p)) + '</div>' +
+                (meta.length ? '<div class="pick-item-meta">' + esc(meta.join(' · ')) + '</div>' : '') +
+              '</div>' +
+            '</div>';
+        }).join('')
+      : '<div class="form-hint" style="margin:8px 0">ما فيه منتج مطابق</div>';
+  }).catch(function () {
+    host.innerHTML = '<div class="form-hint">تعذّر تحميل المنتجات</div>';
   });
 }
 
@@ -4504,6 +4892,10 @@ function renderScanNotFound(code, note) {
       'لم يُعثر على منتج بهذا الباركود في مخزونك:<span class="code">' + esc(code) + '</span>' +
       (note ? '<div class="lookup-note">' + esc(note) + '</div>' : '') +
       '<button class="btn btn-primary btn-block btn-sm" data-action="scan-add-new">➕ إضافة منتج جديد بهذا الباركود</button>' +
+      /* The second answer to "not found" — and usually the right one. The
+         product may already exist with no barcode, typed in from accounting;
+         adding it again would leave two rows for one carton. */
+      '<button class="btn btn-outline btn-block btn-sm" data-action="scan-link-existing" style="margin-top:8px">🔗 اربطه بمنتج موجود في المخزون</button>' +
     '</div>';
 }
 
@@ -5837,6 +6229,7 @@ function createBackup(includeImages) {
           if (p.hasOwnProperty(k)) copy[k] = p[k];
         }
         copy.images = [];
+        copy.photos = [];      /* the big copies are images too */
         return copy;
       });
     }
@@ -7204,6 +7597,14 @@ var ACTIONS = {
     $('product-name').focus();
   },
   'scanner-manual': function () { submitManualBarcode(); },
+  'scan-attach-barcode': function () { openScanner('attach-barcode'); },
+  'scan-link-existing': function () { renderScanLinkPicker(); },
+  'scan-link-to': function (el) {
+    var id = el.dataset.productId;
+    var code = pendingScanCode;
+    closeModal('scanner-modal');
+    attachBarcodeToProduct(code, id).then(function () { return openProductDetails(id); });
+  },
   'toggle-torch': function () { toggleTorch(); },
   /* Both sheets share one pair of hidden file inputs; handlePhotoFile decides
      the destination from whichever sheet is open when the file arrives. */
@@ -7214,27 +7615,36 @@ var ACTIONS = {
   /* The working list is edited in place; nothing is written until Save, so
      backing out of the sheet leaves the stored record untouched. */
   'remove-photo': function (el) {
-    pendingImages.splice(Number(el.dataset.index) || 0, 1);
+    var i = Number(el.dataset.index) || 0;
+    pendingImages.splice(i, 1);
+    pendingPhotos.splice(i, 1);
     renderFormPhotos();
   },
   'make-cover': function (el) {
     var i = Number(el.dataset.index) || 0;
     if (i < 0 || i >= pendingImages.length) return;
     pendingImages.unshift(pendingImages.splice(i, 1)[0]);
+    pendingPhotos.unshift(pendingPhotos.splice(i, 1)[0]);
     renderFormPhotos();
   },
   /* The details sheet writes as it goes, so these three touch the database. */
-  'view-photo': function (el) {
-    viewingPhoto = Number(el.dataset.index) || 0;
-    if (detailsState) renderDetailsBody();
-  },
+  /* Tapping any photo opens it full screen. The thumbnail it was tapped on is
+     the one that opens — the strip is an index, not a set of buttons that all
+     lead to the first photo. */
+  'open-photo': function (el) { openPhotoViewer('details', Number(el.dataset.index) || 0); },
+  'open-form-photo': function (el) { openPhotoViewer('form', Number(el.dataset.index) || 0); },
+  'viewer-close': function () { closePhotoViewer(); },
+  'viewer-next': function () { viewerStep(1); },
+  'viewer-prev': function () { viewerStep(-1); },
+  'viewer-cover': function () { viewerMakeCover(); },
+  'viewer-remove': function () { viewerRemove(); },
   'remove-detail-photo': function (el) {
     var i = Number(el.dataset.index) || 0;
-    updateProductPhotos(function (list) { list.splice(i, 1); }, 'تم حذف الصورة');
+    updateProductPhotos(function (pair) { pair.splice(i, 1); }, 'تم حذف الصورة');
   },
   'make-detail-cover': function (el) {
     var i = Number(el.dataset.index) || 0;
-    updateProductPhotos(function (list) { list.unshift(list.splice(i, 1)[0]); }, 'تم تعيين الغلاف');
+    updateProductPhotos(function (pair) { pair.unshift(pair.splice(i, 1)[0]); }, 'تم تعيين الغلاف');
   },
   'save-product': function () { saveProduct(); },
   'increase-qty': function () { changeQuantity(1); },
@@ -7468,11 +7878,11 @@ function wireUp() {
   });
 
   $('photo-camera').addEventListener('change', function (e) {
-    handlePhotoFile(e.target.files[0]);
+    handlePhotoFiles(e.target.files);
     e.target.value = '';
   });
   $('photo-library').addEventListener('change', function (e) {
-    handlePhotoFile(e.target.files[0]);
+    handlePhotoFiles(e.target.files);
     e.target.value = '';
   });
   $('backup-input').addEventListener('change', function (e) {
@@ -7634,6 +8044,13 @@ function init() {
   $('product-unit').dataset.prevUnit = DEFAULT_UNIT;
 
   wireUp();
+
+  /* The viewer pushes one history entry when it opens, so the phone's back
+     gesture closes the photo instead of leaving the sheet underneath. Every
+     other route into the viewer (✕, back, Android hardware back) ends here. */
+  window.addEventListener('popstate', function () {
+    if (viewerState) closePhotoViewer(true);
+  });
 
   return openDB().then(function () {
     requestPersistentStorage();
