@@ -282,6 +282,41 @@ button,input,select,textarea{font-family:inherit}
 .pick-item-info{flex:1;min-width:0}
 .pick-item-name{font-size:13.5px;font-weight:600;color:var(--gray-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick-item-meta{font-size:11px;color:var(--gray);margin-top:2px;font-variant-numeric:tabular-nums}
+
+/* ---------- Reading an order sheet from a photo ----------
+   The review list is the whole point of this feature: the reader is good but
+   not perfect, and a wrong quantity deducts the wrong stock. Every row it read
+   is shown, the doubtful ones are marked, and nothing is written until the
+   user taps add. */
+.paper-row{display:flex;align-items:flex-start;gap:9px;padding:10px 0;border-top:1px solid var(--border)}
+.paper-row:first-child{border-top:0}
+.paper-check{width:21px;height:21px;flex-shrink:0;margin-top:3px;accent-color:var(--primary)}
+.paper-body{flex:1;min-width:0}
+.paper-title{font-size:13.5px;font-weight:600;color:var(--gray-dark);line-height:1.45;overflow-wrap:anywhere}
+.paper-sub{font-size:11px;color:var(--gray);margin-top:3px;font-variant-numeric:tabular-nums}
+.paper-sub.bad{color:#B3261E;font-weight:600}
+.paper-sub.warn{color:#A55600;font-weight:600}
+.paper-qty{width:64px;flex-shrink:0;padding:7px 5px;border:1px solid var(--border);border-radius:9px;
+  font-size:14px;text-align:center;background:#FAFBFC;font-variant-numeric:tabular-nums;
+  -webkit-appearance:none;appearance:none;color:#1F2937}
+.paper-qty:focus{outline:none;border-color:var(--primary);background:#fff}
+.paper-qty.flag{border-color:#E8B44A;background:#FFFBF2}
+.paper-cands{display:flex;flex-direction:column;gap:5px;margin-top:7px}
+.paper-cand{border:1px solid var(--border);background:#F7F9FC;color:#334155;border-radius:8px;
+  padding:7px 9px;font:inherit;font-size:12px;text-align:right;cursor:pointer;line-height:1.4}
+.paper-cand:active{background:#E9EEF4}
+.paper-summary{font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:10px}
+
+.ocr-busy{position:fixed;inset:0;z-index:1600;background:rgba(15,23,42,.55);display:none;
+  align-items:center;justify-content:center;padding:26px;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
+.ocr-busy.active{display:flex}
+.ocr-busy-box{background:#fff;border-radius:14px;padding:22px 18px;text-align:center;
+  max-width:300px;width:100%;box-shadow:var(--shadow-lg)}
+.ocr-busy-box h3{font-size:15px;color:var(--gray-dark);margin-bottom:6px}
+.ocr-busy-box p{font-size:12.5px;color:var(--gray);line-height:1.6}
+.ocr-spin{width:32px;height:32px;margin:0 auto 13px;border:3px solid #E3E8EF;
+  border-top-color:var(--primary);border-radius:50%;animation:ocrSpin .8s linear infinite}
+@keyframes ocrSpin{to{transform:rotate(360deg)}}
 .pick-add{flex-shrink:0;font-size:12.5px;font-weight:700;color:var(--primary)}
 .order-summary{background:#F5F7F9;border-radius:10px;padding:11px 12px;font-size:12.5px;color:#414B57;line-height:1.75}
 .order-summary b{color:var(--gray-dark)}
@@ -415,6 +450,7 @@ button,input,select,textarea{font-family:inherit}
     <div class="content">
       <div class="action-row">
         <button class="btn btn-primary" data-action="add-order">➕ طلب جديد</button>
+        <button class="btn btn-outline" data-action="add-order-from-photo">📄 من صورة</button>
       </div>
       <div class="orders-list" id="orders-list"></div>
     </div>
@@ -699,6 +735,9 @@ button,input,select,textarea{font-family:inherit}
       </div>
       <div id="order-pick-results"></div>
 
+      <button class="btn btn-outline btn-block btn-sm" data-action="scan-order-paper"
+              style="margin:2px 0 4px">📄 اقرأ ورقة طلب من صورة</button>
+
       <div class="divider"></div>
       <div class="form-label" style="margin-bottom:8px">أصناف الطلب <span id="order-lines-count"></span></div>
       <div id="order-lines"></div>
@@ -783,6 +822,38 @@ button,input,select,textarea{font-family:inherit}
 <input type="file" id="photo-camera" accept="image/*" capture="environment" hidden>
 <input type="file" id="photo-library" accept="image/*" multiple hidden>
 <input type="file" id="backup-input" accept=".json,application/json" hidden>
+<!-- No `capture` here on purpose: with a bare accept the phone offers BOTH the
+     camera and the photo library in one sheet, and a sheet photographed last
+     night is just as good as one photographed now. -->
+<input type="file" id="paper-photo" accept="image/*" hidden>
+
+<!-- ===== Review what was read off the order sheet =====
+     Nothing reaches the order until the user taps add: the reader is good, not
+     perfect, and a wrong quantity silently deducts the wrong stock. -->
+<div id="paper-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="font-size:16.5px">أصناف الورقة</h2>
+      <button class="close-btn" data-action="close-paper" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="paper-summary" id="paper-summary"></div>
+      <div id="paper-rows"></div>
+      <div class="stack" style="margin-top:15px">
+        <button class="btn btn-primary btn-block" data-action="apply-paper">➕ إضافة للطلب</button>
+        <button class="btn btn-ghost btn-block" data-action="close-paper">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ocr-busy" id="ocr-busy">
+  <div class="ocr-busy-box">
+    <div class="ocr-spin"></div>
+    <h3>جاري قراءة الورقة…</h3>
+    <p id="ocr-busy-text">أول مرة فقط: تجهيز محرّك القراءة (قد يأخذ ثوانٍ).</p>
+  </div>
+</div>
 
 <!-- ===== Full-screen photo viewer =====
      One overlay for every photo in the app: the product's hero image, the
@@ -815,7 +886,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.15.2';
+var APP_VERSION = '2.16.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -6800,6 +6871,639 @@ function removeOrderLine(productId) {
   renderOrderLines();
 }
 
+/* ===================== Reading an order sheet off a photo =====================
+
+   The sheet that reaches the store is printed, not exported: a number, a name,
+   a requested quantity, a unit, and a pile of columns nobody here needs. So the
+   app photographs it and reads it back into order lines.
+
+   Three decisions shape everything below:
+
+   1. ONLY TWO COLUMNS MATTER — the article number and the requested quantity.
+      The name comes from the article list the app already holds, which is
+      newer and cleaner than anything a camera can read off paper. That is why
+      a garbled name is harmless and a garbled number is not.
+
+   2. THE READER IS GOOD, NOT PERFECT. Measured on a real sheet: 14 of 15
+      numbers and most quantities, from a photo taken at an angle. Perfect is
+      not on offer, so the result is never trusted blindly — it lands in a
+      review list first, doubtful rows are marked, and nothing is written until
+      the user taps add. A wrong quantity that saves itself is a wrong
+      deduction from stock.
+
+   3. IT RUNS ON THE DEVICE. No upload, no account, no network — the engine
+      lives in vendor/ocr/ and the trained model with it. The cost is ~12 MB of
+      files that are fetched the first time this is used, never before. */
+var OCR_DIR = 'vendor/ocr/';
+var ocrWorker = null;        /* kept alive between scans: loading costs seconds */
+var ocrLoading = null;       /* the in-flight promise, so two taps cannot race */
+var paperRows = null;        /* the review list currently on screen */
+var paperReturnTo = '';      /* which sheet to reopen if the user backs out */
+
+function ocrBusy(on, text) {
+  var box = $('ocr-busy');
+  if (!box) return;
+  if (text) $('ocr-busy-text').textContent = text;
+  box.classList.toggle('active', !!on);
+}
+
+/* The engine is ~67 KB of glue; the model and the wasm core behind it are the
+   megabytes. Loading the glue up front would cost every launch for a feature
+   most launches never touch, so it is pulled in on first use. */
+function loadOcrEngine() {
+  if (window.Tesseract) return Promise.resolve();
+  if (ocrLoading) return ocrLoading;
+
+  ocrLoading = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = OCR_DIR + 'tesseract.min.js';
+    s.onload = function () { resolve(); };
+    s.onerror = function () { ocrLoading = null; reject(new Error('تعذّر تحميل محرّك القراءة')); };
+    document.head.appendChild(s);
+  });
+  return ocrLoading;
+}
+
+function getOcrWorker() {
+  if (ocrWorker) return Promise.resolve(ocrWorker);
+  return loadOcrEngine().then(function () {
+    return Tesseract.createWorker('eng', 1, {
+      workerPath: OCR_DIR + 'worker.min.js',
+      corePath: OCR_DIR,
+      langPath: OCR_DIR.replace(/\/$/, ''),
+      gzip: false,            /* the model ships uncompressed: no unzip step */
+      cacheMethod: 'none'     /* already on disk — caching it again doubles it */
+    });
+  }).then(function (worker) {
+    ocrWorker = worker;
+    return worker.setParameters({ tessedit_pageseg_mode: '6' });
+  }).then(function () { return ocrWorker; });
+}
+
+/* The camera hands over a 12-megapixel photo; the reader wants roughly two
+   thousand pixels across, greyscale, with the paper's white actually white.
+   Downscaling first also makes the contrast pass cheap. */
+function prepareForOcr(img) {
+  var w = img.naturalWidth || img.width;
+  var h = img.naturalHeight || img.height;
+  var target = 1900;
+  var scale = target / Math.max(w, h);
+  if (scale > 2.5) scale = 2.5;          /* a tiny thumbnail cannot be rescued */
+  var cw = Math.round(w * scale), ch = Math.round(h * scale);
+
+  var canvas = document.createElement('canvas');
+  canvas.width = cw; canvas.height = ch;
+  var ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, cw, ch);
+
+  var frame = ctx.getImageData(0, 0, cw, ch);
+  var data = frame.data;
+  var hist = new Uint32Array(256);
+  var i, lum;
+
+  for (i = 0; i < data.length; i += 4) {
+    lum = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+    data[i] = data[i + 1] = data[i + 2] = lum;
+    hist[lum | 0]++;
+  }
+
+  /* Stretch the tones between the 2nd and 98th percentile. A phone photo of a
+     page is grey-on-grey; without this the thin strokes of the digits melt
+     into the paper and the reader starts guessing. */
+  var total = cw * ch, cut = total * 0.02, acc = 0, lo = 0, hi = 255;
+  for (i = 0; i < 256; i++) { acc += hist[i]; if (acc >= cut) { lo = i; break; } }
+  acc = 0;
+  for (i = 255; i >= 0; i--) { acc += hist[i]; if (acc >= cut) { hi = i; break; } }
+  if (hi - lo < 32) { lo = 0; hi = 255; }
+
+  var span = hi - lo;
+  for (i = 0; i < data.length; i += 4) {
+    var v = (data[i] - lo) * 255 / span;
+    data[i] = data[i + 1] = data[i + 2] = v < 0 ? 0 : (v > 255 ? 255 : v);
+  }
+  ctx.putImageData(frame, 0, 0);
+  return canvas;
+}
+
+/* ---- Parsing ------------------------------------------------------------
+   The reader returns words with boxes. Columns are found from the header row
+   ("Number", "Article", "Requested"), and every word below is assigned to the
+   header it sits closest to. Reading the numbers off the boxes rather than off
+   the text is what keeps "40.00" from being mistaken for the article name. */
+
+function ocrDigits(text) {
+  return String(text || '').replace(/[^\d]/g, '');
+}
+
+function ocrCleanName(text) {
+  return String(text || '')
+    .replace(/[|_\[\]{}<>~^`"]/g, ' ')
+    .replace(/[‘’“”«»]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s.,;:—–-]+|[\s.,;:—–-]+$/g, '')
+    .trim();
+}
+
+function ocrRowKey(word) {
+  return String(word.text || '').replace(/[^A-Za-z]/g, '').toLowerCase();
+}
+
+function clusterRows(words) {
+  var list = words
+    .filter(function (w) { return w.text && w.text.trim() && w.bbox && w.bbox.y1 > w.bbox.y0; })
+    .map(function (w) {
+      return { text: w.text, x0: w.bbox.x0, x1: w.bbox.x1, y0: w.bbox.y0, y1: w.bbox.y1,
+               cy: (w.bbox.y0 + w.bbox.y1) / 2, h: w.bbox.y1 - w.bbox.y0 };
+    })
+    .sort(function (a, b) { return a.cy - b.cy; });
+  if (!list.length) return [];
+
+  /* Row spacing is judged against the MEDIAN word height, not the tallest word
+     on the row. A three-line article name produces a word twice as tall as the
+     digits beside it; measuring against that merges two rows into one and the
+     merged row carries two article numbers — which then match nothing. */
+  var heights = list.map(function (w) { return w.h; }).sort(function (a, b) { return a - b; });
+  var median = heights[Math.floor(heights.length / 2)] || 20;
+  var gap = median * 0.8;
+
+  var rows = [];
+  list.forEach(function (w) {
+    var last = rows[rows.length - 1];
+    if (last && w.cy - last.cy <= gap) {
+      last.words.push(w);
+      last.cy = last.words.reduce(function (sum, x) { return sum + x.cy; }, 0) / last.words.length;
+      last.h = Math.max(last.h, w.h);
+    } else {
+      rows.push({ cy: w.cy, h: w.h, words: [w] });
+    }
+  });
+  rows.forEach(function (r) { r.words.sort(function (a, b) { return a.x0 - b.x0; }); });
+  return rows;
+}
+
+/* A bare integer in the quantity column is almost always a decimal whose point
+   the camera lost — "5.00" arrives as "500", "5.60" as "560". This sheet is
+   printed with two decimals in that column, so a three-or-more digit integer
+   there is read back as hundredths, and flagged so the review list marks it. */
+function ocrQtyFromToken(token) {
+  var s = String(token || '').replace(/[^\d.,]/g, '').replace(/,/g, '.');
+  if (!s) return { qty: null, guessed: true };
+
+  var dotted = s.match(/(\d+)\.(\d{1,2})/);
+  if (dotted) return { qty: parseFloat(dotted[1] + '.' + dotted[2]), guessed: false };
+
+  var digits = s.replace(/\D/g, '');
+  if (!digits) return { qty: null, guessed: true };
+  if (digits.length >= 3) return { qty: parseInt(digits, 10) / 100, guessed: true };
+  return { qty: parseInt(digits, 10), guessed: true };
+}
+
+/* The quantity is the FIRST number in its column, not the last: when the AVE
+   and Total headers go unread — they sit in small print at the right edge —
+   their values fall into the same column, and the last number there is the
+   line total, not what was requested. Two decimals is the shape of a requested
+   amount, so that shape wins over a bare integer. */
+function ocrQtyFromTokens(tokens) {
+  var list = (tokens || [])
+    .map(function (t) { return String(t).replace(/[^\d.,]/g, ''); })
+    .filter(function (t) { return /\d/.test(t); });
+  if (!list.length) return { qty: null, guessed: true };
+
+  for (var i = 0; i < list.length; i++) {
+    if (/^\d{1,4}[.,]\d{2}$/.test(list[i])) {
+      return { qty: parseFloat(list[i].replace(',', '.')), guessed: false };
+    }
+  }
+  for (var j = 0; j < list.length; j++) {
+    if (/^\d{1,4}$/.test(list[j])) return ocrQtyFromToken(list[j]);
+  }
+  return ocrQtyFromToken(list[0]);
+}
+
+function parseSheet(words) {
+  if (!words || !words.length) return [];
+
+  var HEADER_KEYS = ['number', 'article', 'requested', 'unit', 'ave', 'total', 'issued'];
+  var header = {};
+  words.forEach(function (w) {
+    var key = ocrRowKey(w);
+    if (!key || header[key]) return;
+    if (HEADER_KEYS.indexOf(key) > -1) header[key] = w.bbox;
+  });
+
+  /* Nearest-header assignment needs the header centres; without a header row
+     there is nothing to assign to, so fall back to reading each line as text. */
+  var anchors = HEADER_KEYS
+    .filter(function (k) { return header[k]; })
+    .map(function (k) { return { key: k, cx: (header[k].x0 + header[k].x1) / 2 }; })
+    .sort(function (a, b) { return a.cx - b.cx; });
+
+  if (anchors.length < 2 || !header.number) {
+    return parseSheetByText(words);
+  }
+
+  var headerTop = Math.min.apply(null, anchors.map(function (a) { return header[a.key].y0; }));
+  var out = [];
+  var blanks = 0;
+
+  clusterRows(words).forEach(function (row) {
+    /* The header row is skipped by what it CONTAINS, not by where it sits: a
+       tall header can merge with the first data row, and cutting by height
+       would throw that row away along with the titles. */
+    var isHeader = row.words.some(function (w) { return HEADER_KEYS.indexOf(ocrRowKey(w)) > -1; });
+    if (isHeader) return;
+    if (row.cy < headerTop) return;
+
+    var cols = {};
+    row.words.forEach(function (w) {
+      var cx = (w.x0 + w.x1) / 2;
+      var best = anchors[0];
+      for (var i = 1; i < anchors.length; i++) {
+        if (Math.abs(cx - anchors[i].cx) < Math.abs(cx - best.cx)) best = anchors[i];
+      }
+      (cols[best.key] = cols[best.key] || []).push(w.text);
+    });
+
+    var joined = row.words.map(function (w) { return w.text; }).join(' ');
+    if (/grand\s*total/i.test(joined)) return;
+
+    var noText = ocrDigits((cols.number || []).join(''));
+    var nameText = ocrCleanName((cols.article || []).join(' '));
+
+    /* A number that drifted into the name column still counts: the digits are
+       what the whole feature hinges on. */
+    if (!noText) {
+      var m = (nameText || '').match(/^\s*(\d{5,7})\b/);
+      if (m) { noText = m[1]; nameText = ocrCleanName(nameText.slice(m[0].length)); }
+    }
+
+    if (!noText && !nameText) { blanks++; if (blanks > 2) return; }
+    else blanks = 0;
+
+    /* A line whose number was destroyed by the camera is not lost yet: the
+       article name is printed right beside it and the article list knows it.
+       It is kept with an empty number and matched by name — the review list
+       still shows it, so a wrong guess is visible rather than silent. */
+    if (noText) {
+      if (noText.length < 5 || noText.length > 7) return;
+    } else if (ocrTokens(nameText).length < 2) {
+      return;
+    }
+
+    var qty = ocrQtyFromTokens(cols.requested);
+
+    /* A requested amount on these sheets is a whole number. A fraction that
+       came off the paper is far more likely to be a misread point ("5.00" read
+       as "5.60") than a real half-kilo request, so it is kept but marked —
+       the value is not overridden, the user is told to look at it. */
+    var fractional = qty.qty !== null && Math.abs(qty.qty % 1) > 0.001;
+
+    out.push({ no: noText, name: nameText, qty: qty.qty,
+               guessed: qty.guessed || fractional, raw: joined });
+  });
+
+  /* A number read twice is one line, not two. */
+  var seen = {};
+  return out.filter(function (r) {
+    if (seen[r.no]) return false;
+    seen[r.no] = true;
+    return true;
+  });
+}
+
+/* No header row to measure against (a cropped photo, a different sheet):
+   fall back to the shape of the text — a number, then words, then a decimal. */
+function parseSheetByText(words) {
+  var lines = {};
+  clusterRows(words).forEach(function (row) {
+    var text = row.words.map(function (w) { return w.text; }).join(' ');
+    var no = (text.match(/\b(\d{6})\b/) || [])[1];
+    if (!no) return;
+    var after = text.slice(text.indexOf(no) + no.length);
+    var qtyMatch = after.match(/(\d+[.,]\d{2})/);
+    lines[no] = {
+      no: no,
+      name: ocrCleanName(after.replace(/(\d+[.,]\d{2}).*$/, '')),
+      qty: qtyMatch ? parseFloat(qtyMatch[1].replace(',', '.')) : null,
+      guessed: !qtyMatch,
+      raw: text
+    };
+  });
+  return Object.keys(lines).map(function (k) { return lines[k]; });
+}
+
+/* ---- Matching -----------------------------------------------------------
+   Number first, then number-with-one-typo, then the name. The order matters:
+   a number is unique, a name is not, and the article list is the authority on
+   both. */
+
+function ocrDistance(a, b) {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  var prev = [], cur = [], i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur.slice();
+  }
+  return prev[b.length];
+}
+
+/* Words that describe the PACKAGE, not the product. Every row on a sheet ends
+   in "Pkt 100 Gr" or "Tin 2KG", so without this list two unrelated articles
+   share two "tokens" and match each other — Garam Masala landed on Tea Lipton
+   exactly that way. Numbers go too: "100" says nothing about what is inside. */
+var OCR_NAME_STOP = {
+  pkt: 1, pkts: 1, kg: 1, kgs: 1, gr: 1, gm: 1, gms: 1, gram: 1, grams: 1,
+  ltr: 1, litre: 1, liter: 1, litres: 1, ml: 1, tin: 1, tins: 1, jar: 1, jars: 1,
+  bag: 1, bags: 1, pcs: 1, pc: 1, each: 1, box: 1, carton: 1, cartons: 1,
+  case: 1, cases: 1, roll: 1, rolls: 1, the: 1, and: 1, with: 1, for: 1
+};
+
+function ocrTokens(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06FF]+/g, ' ')
+    .split(' ')
+    .filter(function (t) {
+      if (t.length < 3) return false;
+      if (/^\d+$/.test(t)) return false;
+      return !OCR_NAME_STOP[t];
+    });
+}
+
+function ocrMatchRows(rows) {
+  return getAllProductsCached().then(function (all) {
+    var products = activeOf(all);
+
+    var byNo = {};
+    products.forEach(function (p) {
+      var no = String(p.articleNo || '').trim();
+      if (no) byNo[no] = p;
+    });
+    var numbers = Object.keys(byNo);
+
+    var prepared = products.map(function (p) {
+      return { p: p, tokens: ocrTokens(displayName(p) + ' ' + (articleName(p.articleNo) || '')) };
+    });
+
+    var out = rows.map(function (row) { return { row: row, product: null, how: '', cands: [] }; });
+    var claimed = {};
+
+    /* Pass one: numbers. A number is a fact, so these are settled before any
+       name is looked at — and the products they name are then off-limits. */
+    function nameScoreFor(product, tokens) {
+      if (!tokens.length) return 0;
+      var have = ocrTokens(displayName(product) + ' ' + (articleName(product.articleNo) || ''));
+      var hit = tokens.filter(function (t) { return have.indexOf(t) > -1; }).length;
+      return hit / tokens.length;
+    }
+
+    out.forEach(function (item) {
+      var no = String(item.row.no || '').trim();
+      if (!no) return;
+
+      if (byNo[no]) { item.product = byNo[no]; item.how = 'number'; }
+      else {
+        /* One typo in a six-digit number is a camera artefact — but three
+           different numbers can all sit one digit away from the same article,
+           and accepting the nearest one turned Spinach and Cream into Milk.
+           So a correction must be corroborated by the name beside it. */
+        var near = numbers.filter(function (n) { return ocrDistance(n, no) <= 1 && !claimed[byNo[n].id]; });
+        if (near.length === 1) {
+          var tokens = ocrTokens(item.row.name);
+          if (!tokens.length || nameScoreFor(byNo[near[0]], tokens) >= 0.5) {
+            item.product = byNo[near[0]];
+            item.how = 'typo';
+          }
+        }
+      }
+      if (item.product) claimed[item.product.id] = true;
+    });
+
+    /* Pass two: names, for the lines whose number the camera destroyed. A
+       product already claimed by a number is skipped — two rows landing on the
+       same product is how an order ends up with a doubled quantity, and the
+       name match is the weaker of the two, so it yields. */
+    out.forEach(function (item) {
+      if (item.product) return;
+
+      var tokens = ocrTokens(item.row.name);
+      if (!tokens.length) return;
+
+      var scored = prepared.map(function (e) {
+        var hit = tokens.filter(function (t) { return e.tokens.indexOf(t) > -1; }).length;
+        return { p: e.p, score: hit / tokens.length, hits: hit };
+      }).filter(function (e) { return e.hits > 0; })
+        .sort(function (a, b) { return b.score - a.score || b.hits - a.hits; });
+
+      var free = scored.filter(function (e) { return !claimed[e.p.id]; });
+      item.cands = (free.length ? free : scored).slice(0, 3).map(function (e) { return e.p; });
+
+      /* Three quarters of the words have to line up. Half is not a match: on a
+         sheet of frozen vegetables every line shares "frozen vegetables", and
+         a 2-of-3 overlap put spinach on top of green peas. */
+      if (free.length && free[0].score >= 0.75) {
+        item.product = free[0].p;
+        item.how = 'name';
+        item.cands = free.slice(1, 3).map(function (e) { return e.p; });
+        claimed[item.product.id] = true;
+      }
+    });
+
+    return out;
+  });
+}
+
+/* ---- The review list ---------------------------------------------------- */
+
+function scanOrderPaper(returnTo) {
+  paperReturnTo = returnTo || '';
+  var input = $('paper-photo');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+function handlePaperFile(file) {
+  if (!file) return Promise.resolve();
+
+  /* Browsers refuse to start a worker from a file:// page, and the reader IS a
+     worker. Opening index.html straight off the disk is a normal thing to do
+     while testing, so it says what is wrong instead of failing as "could not
+     load the engine". */
+  if (location.protocol === 'file:') {
+    showToast('قراءة الورقة تحتاج تشغيل التطبيق من الموقع أو من التطبيق المثبّت');
+    return Promise.resolve();
+  }
+
+  ocrBusy(true, 'جاري تجهيز محرّك القراءة…');
+  var url = URL.createObjectURL(file);
+
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
+    img.onload = function () { resolve(img); };
+    img.onerror = function () { reject(new Error('تعذّر فتح الصورة')); };
+    img.src = url;
+  }).then(function (img) {
+    var canvas = prepareForOcr(img);
+    URL.revokeObjectURL(url);
+    ocrBusy(true, 'جاري قراءة الورقة… قد يأخذ نصف دقيقة في أول مرة.');
+    return getOcrWorker().then(function (worker) {
+      return worker.recognize(canvas);
+    });
+  }).then(function (result) {
+    var rows = parseSheet((result.data.words || []));
+    if (!rows.length) throw new Error('ما لقيت أرقام أصناف في الصورة — جرّب صورة أوضح وأقرب للورقة');
+    return ocrMatchRows(rows);
+  }).then(function (matched) {
+    paperRows = matched.map(function (m) {
+      return {
+        no: m.row.no, name: m.row.name, qty: m.row.qty, guessed: m.row.guessed,
+        raw: m.row.raw,
+        productId: m.product ? m.product.id : '',
+        productName: m.product ? displayName(m.product) : '',
+        unit: m.product ? unitOf(m.product) : '',
+        how: m.how,
+        cands: m.cands.map(function (p) { return { id: p.id, name: displayName(p) }; }),
+        include: !!m.product
+      };
+    });
+    ocrBusy(false);
+    renderPaperReview();
+    openModal('paper-modal');
+  }).catch(function (error) {
+    ocrBusy(false);
+    URL.revokeObjectURL(url);
+    console.error(error);
+    showToast(error && error.message ? error.message : 'تعذّرت قراءة الورقة');
+    if (paperReturnTo) { openModal(paperReturnTo); paperReturnTo = ''; }
+  });
+}
+
+function renderPaperReview() {
+  var host = $('paper-rows');
+  if (!host || !paperRows) return;
+
+  var ready = paperRows.filter(function (r) { return r.productId; }).length;
+  var unknown = paperRows.length - ready;
+
+  /* Counts are written as "label: number" rather than "number + noun". Arabic
+     changes the noun's form at eleven, and this line regularly shows fifteen —
+     "15 سطراً" not "15 سطر". A label sidesteps the whole question. */
+  $('paper-summary').innerHTML =
+    'الأسطر المقروءة: <strong>' + paperRows.length + '</strong>' +
+    ' · جاهز: <strong>' + ready + '</strong>' +
+    (unknown ? ' · يحتاج مراجعة: <strong>' + unknown + '</strong>' : '') +
+    '<br>راجع الكميات قبل الإضافة — القراءة من صورة قد تخطئ في رقم.';
+
+  host.innerHTML = paperRows.map(function (r, i) {
+    /* Shown as read, not rounded to the product's unit: 5.6 that displays as 6
+       is a number the user cannot check. Rounding happens when the line is
+       written, which is the moment it stops being a reading and becomes a
+       quantity. */
+    var qty = (r.qty === null || r.qty === undefined)
+      ? ''
+      : String(Math.round(Number(r.qty) * 100) / 100);
+    var title = r.productName || (r.name ? r.name : 'سطر غير واضح');
+    var noLabel = r.no ? 'رقم ' + r.no : 'بلا رقم مقروء';
+    var sub, subCls = '';
+
+    if (r.productId) {
+      if (r.how === 'typo') { sub = noLabel + ' · طابقناه بعد تصحيح حرف'; subCls = 'warn'; }
+      else if (r.how === 'name') { sub = noLabel + ' · طابقناه بالاسم'; subCls = 'warn'; }
+      else { sub = noLabel; }
+      if (r.guessed) { sub += ' · الكمية مُقدّرة، راجعها'; subCls = 'warn'; }
+    } else {
+      sub = noLabel + ' — ما لقيناه في المخزون';
+      subCls = 'bad';
+    }
+
+    var cands = '';
+    if (!r.productId && r.cands.length) {
+      cands = '<div class="paper-cands">' + r.cands.map(function (c) {
+        return '<button type="button" class="paper-cand" data-action="paper-pick" ' +
+          'data-index="' + i + '" data-product-id="' + esc(c.id) + '">هل تقصد: ' + esc(c.name) + '</button>';
+      }).join('') + '</div>';
+    }
+
+    return '<div class="paper-row">' +
+        '<input type="checkbox" class="paper-check" data-action="paper-toggle" data-index="' + i + '"' +
+          (r.include ? ' checked' : '') + (r.productId ? '' : ' disabled') + '>' +
+        '<div class="paper-body">' +
+          '<div class="paper-title">' + esc(title) + '</div>' +
+          '<div class="paper-sub ' + subCls + '">' + esc(sub) + '</div>' +
+          cands +
+        '</div>' +
+        '<input type="number" class="paper-qty' + (r.guessed ? ' flag' : '') + '" ' +
+          'data-action="paper-qty" data-index="' + i + '" value="' + esc(String(qty)) + '" ' +
+          'inputmode="decimal" min="0" step="any" aria-label="الكمية">' +
+      '</div>';
+  }).join('');
+
+  var btn = document.querySelector('[data-action="apply-paper"]');
+  if (btn) {
+    var n = paperRows.filter(function (r) { return r.include && r.productId; }).length;
+    btn.textContent = n ? '➕ إضافة المحدد للطلب (' + n + ')' : 'ما فيه صنف جاهز';
+    btn.disabled = !n;
+  }
+}
+
+function paperPick(index, productId) {
+  var row = paperRows && paperRows[index];
+  if (!row) return;
+  return getProduct(productId).then(function (p) {
+    if (!p) return;
+    row.productId = p.id;
+    row.productName = displayName(p);
+    row.unit = unitOf(p);
+    row.how = 'manual';
+    row.include = true;
+    row.cands = [];
+    renderPaperReview();
+  });
+}
+
+/* The paper's quantity wins, but the app's own unit decides how many decimals
+   survive — an order line is counted in the unit the product is stocked in. */
+function applyPaperRows() {
+  if (!paperRows || !orderDraft) { closeModal('paper-modal'); return; }
+
+  var added = 0, skipped = 0;
+  paperRows.forEach(function (r) {
+    if (!r.include || !r.productId) return;
+    var step = unitInfo(r.unit || 'piece').step;
+    var qty = Number(r.qty);
+    if (!isFinite(qty) || qty <= 0) qty = step;
+    qty = roundQty(qty, unitInfo(r.unit || 'piece').decimals);
+
+    var existing = orderDraft.items.filter(function (l) { return l.productId === r.productId; })[0];
+    if (existing) {
+      existing.qty = roundQty(Number(existing.qty) + qty, unitInfo(existing.unit).decimals);
+      skipped++;
+    } else {
+      orderDraft.items.push({
+        productId: r.productId,
+        name: r.name || '',
+        articleNo: r.no,
+        article: articleName(r.no) || '',
+        barcode: '',
+        unit: r.unit || 'piece',
+        qty: qty
+      });
+      added++;
+    }
+  });
+
+  paperRows = null;
+  closeModal('paper-modal');
+  renderOrderLines();
+  showToast('أُضيف للطلب: ' + added + (skipped ? ' · مكرر مدموج: ' + skipped : ''));
+}
+
 function saveOrder() {
   if (!orderDraft) return Promise.resolve();
   var customer = $('order-customer').value.trim();
@@ -7555,6 +8259,13 @@ var ACTIONS = {
 
   /* ---- Orders ---- */
   'add-order': function () { openOrderEditor(null); },
+  /* Straight from the orders tab: open a fresh draft, then go looking for the
+     paper. The editor opens first so the review list has somewhere to land. */
+  'add-order-from-photo': function () { openOrderEditor(null); scanOrderPaper('order-modal'); },
+  'scan-order-paper': function () { scanOrderPaper('order-modal'); },
+  'close-paper': function () { paperRows = null; closeModal('paper-modal'); },
+  'apply-paper': function () { applyPaperRows(); },
+  'paper-pick': function (el) { paperPick(Number(el.dataset.index), el.dataset.productId); },
   'open-order': function (el) { var id = el.dataset.orderId; if (id) openOrderDetails(id); },
   'edit-order': function (el) {
     var id = el.dataset.orderId;
@@ -7631,8 +8342,7 @@ var ACTIONS = {
   /* Tapping any photo opens it full screen. The thumbnail it was tapped on is
      the one that opens — the strip is an index, not a set of buttons that all
      lead to the first photo. */
-  'open-photo': function (el) { openPhotoViewer('details', Number(el.dataset.index) || 0); },
-  'open-form-photo': function (el) { openPhotoViewer('form', Number(el.dataset.index) || 0); },
+  'open-photo': function (el) { openPhotoViewer('details', Number(el.dataset.index) || 0); },  'open-form-photo': function (el) { openPhotoViewer('form', Number(el.dataset.index) || 0); },
   'viewer-close': function () { closePhotoViewer(); },
   'viewer-next': function () { viewerStep(1); },
   'viewer-prev': function () { viewerStep(-1); },
@@ -7787,6 +8497,35 @@ function wireUp() {
       setOrderLineQty(el.dataset.productId, el.value);
       renderOrderLines();
     }
+  });
+
+  /* The review list edits in place — a quantity corrected here is the one that
+     gets written, and the row's checkbox decides whether it goes in at all. */
+  $('paper-rows').addEventListener('input', function (event) {
+    var el = event.target;
+    if (!el || !el.dataset || !paperRows) return;
+    var i = Number(el.dataset.index);
+    if (!paperRows[i]) return;
+    if (el.dataset.action === 'paper-qty') {
+      paperRows[i].qty = Number(String(el.value).replace(',', '.'));
+      paperRows[i].guessed = false;
+      el.classList.remove('flag');
+    }
+  });
+  $('paper-rows').addEventListener('change', function (event) {
+    var el = event.target;
+    if (!el || !el.dataset || !paperRows) return;
+    var i = Number(el.dataset.index);
+    if (!paperRows[i]) return;
+    if (el.dataset.action === 'paper-toggle') {
+      paperRows[i].include = el.checked;
+      renderPaperReview();
+    }
+  });
+
+  $('paper-photo').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    if (file) handlePaperFile(file);
   });
 
   $('notif-toggle').addEventListener('change', function () {
