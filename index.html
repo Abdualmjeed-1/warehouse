@@ -767,7 +767,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.14.0';
+var APP_VERSION = '2.15.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -5174,7 +5174,14 @@ function pdfBase64ToBytes(base64) {
 
 function buildWarehousePDF(sorted) {
   var dataUrls = pdfRenderPages(sorted);
-  var jpegs = dataUrls.map(function (u) { return pdfBase64ToBytes(u.split(',')[1]); });
+  return pdfFromJpegPages(dataUrls.map(function (u) { return pdfBase64ToBytes(u.split(',')[1]); }));
+}
+
+/* The writer itself, split out from the warehouse report in 2.15.0 so the
+   order sheet can hand it its own pages. It only ever sees finished JPEGs and
+   knows nothing about what is drawn on them — which is why the two documents
+   can share it without either one being able to disturb the other. */
+function pdfFromJpegPages(jpegs) {
 
   /* Objects: 1 catalog, 2 pages, 3.. each image + its content stream, then
      the page objects. Page objects come after their image and stream so the
@@ -5292,6 +5299,424 @@ function exportToPDF() {
         showToast('تعذّر إنشاء ملف PDF');
       }
     }, 30);
+  });
+}
+
+/* ===== Order request sheet — the store's issue note =====
+   The paper the store hands over when stock leaves it: a date and a document
+   number, the place the goods come FROM and the place they are going TO, and a
+   table of the lines. Nothing else — no logo, no user line, no signature
+   rules, no "Authorised" stamp. The bottom of the page is left blank on
+   purpose, because that is where it is signed by hand.
+
+   "From" is not typed anywhere: it is read off the products themselves. Each
+   line on an order points at a product, and the product knows which store it
+   sits in. An order whose lines come from more than one place prints them all,
+   joined with "و" — a note that names only the first store would send whoever
+   picks it to the wrong shelf.
+
+   Built the same way as the warehouse report — laid out on a canvas and handed
+   to the PDF writer as a finished page image — for the same reason: product
+   names are typed in Arabic, and the PDF standard's built-in fonts cannot
+   encode Arabic at all. Drawing through the browser's own text engine is what
+   keeps an Arabic article name correctly shaped on a printed sheet.
+
+   The money columns (AVE, Total, Grand Total) are gone too: the app stores no
+   prices, and a column that is always blank is worse than no column — it
+   invites the reader to think a price of zero was recorded. */
+var OIR_M = 40;                            /* page margin, in points */
+var OIR_COLS = [80, 285, 80, 70];          /* Number · Article · Requested · Unit */
+var OIR_HEAD_H = 22;
+var OIR_ROW_MIN = 20;
+var OIR_LINE_H = 11.5;
+var OIR_TEXT = '#111111';
+var OIR_RULE = '#444444';
+var OIR_GRID = '#8A8A8A';
+var OIR_TABLE_LABELS = ['Number', 'Article', 'Requested', 'Unit'];
+var OIR_LOCATION_JOIN = ' - ';        /* dash between two stores */
+
+function oirFont(o) {
+  return (o.bold ? 'bold ' : '') + (o.size || 10) + 'px ' + PDF_FONT;
+}
+
+/* Which way a string runs. The question is NOT "does it contain Arabic" — a
+   name like `Cheese Halloumi "Pkt 250 GR" جبنة حلوم` contains both, and
+   answering "Arabic" reorders it so the Arabic half prints first, which reads
+   as a different product. The Unicode rule (P2/P3) is the right one: the
+   direction of the FIRST strong character decides the paragraph, and the other
+   script simply follows inside it. */
+function oirIsRtl(text) {
+  var s = String(text === null || text === undefined ? '' : text);
+  var m = /[A-Za-z\u0600-\u06FF]/.exec(s);
+  return !!m && /[\u0600-\u06FF]/.test(m[0]);
+}
+
+/* One run of text. Direction is decided per string, not per page: the sheet is
+   English and reads left to right, but an article name may be Arabic and has
+   to be shaped right to left inside its own cell. */
+function oirText(ctx, text, x, y, opts) {
+  var o = opts || {};
+  var s = String(text === null || text === undefined ? '' : text);
+  ctx.save();
+  ctx.font = oirFont(o);
+  ctx.fillStyle = o.color || OIR_TEXT;
+  ctx.textBaseline = 'alphabetic';
+  var rtl = oirIsRtl(s);
+  ctx.direction = rtl ? 'rtl' : 'ltr';
+  ctx.textAlign = o.align || (rtl ? 'right' : 'left');
+  ctx.fillText(s, x, y);
+  ctx.restore();
+}
+
+/* A table cell. Two things this does that oirText does not:
+
+   1. It CLIPS to the cell's own width. A cell has borders on both sides, and
+      text that escapes them prints on top of the neighbouring column — which
+      is exactly what happened to an Arabic article name before this existed.
+
+   2. It anchors by DIRECTION, not by column edge. An Arabic name reads right
+      to left, so it starts at the cell's right edge and grows leftwards; a
+      Latin name starts at the left edge. Anchoring both on the same edge is
+      what pushed every Arabic name out through the left border. */
+function oirCellText(ctx, text, x, y, w, opts) {
+  var o = opts || {};
+  var s = String(text === null || text === undefined ? '' : text);
+  var rtl = oirIsRtl(s);
+  var align = o.align || (rtl ? 'right' : 'left');
+
+  ctx.save();
+  /* Clipped horizontally only — the rect is the full page height so a
+     descender can never be shaved off by the clip itself. */
+  ctx.beginPath();
+  ctx.rect(x, 0, w, PDF_PAGE_H);
+  ctx.clip();
+
+  ctx.font = oirFont(o);
+  ctx.fillStyle = o.color || OIR_TEXT;
+  ctx.textBaseline = 'alphabetic';
+  ctx.direction = rtl ? 'rtl' : 'ltr';
+  ctx.textAlign = align;
+  var tx = align === 'center' ? x + w / 2 : (align === 'right' ? x + w : x);
+  ctx.fillText(s, tx, y);
+  ctx.restore();
+}
+
+/* Break a name into as many lines as it needs, capped. A long article name is
+   the normal case here — "Paper Roll Large - ( Auto Cut ) Case / 6 Roll" is one
+   real row — so the cell grows instead of clipping the words away. */
+function oirWrap(ctx, text, maxWidth, font, maxLines) {
+  var words = String(text === null || text === undefined ? '' : text)
+    .split(/\s+/).filter(function (w) { return w; });
+  ctx.save();
+  ctx.font = font;
+  var lines = [], cur = '';
+  for (var i = 0; i < words.length; i++) {
+    var test = cur ? cur + ' ' + words[i] : words[i];
+    if (!cur || ctx.measureText(test).width <= maxWidth) cur = test;
+    else { lines.push(cur); cur = words[i]; }
+  }
+  if (cur) lines.push(cur);
+  if (!lines.length) lines = [''];
+
+  if (maxLines && lines.length > maxLines) {
+    lines = lines.slice(0, maxLines);
+    var last = lines[maxLines - 1];
+    while (last.length > 1 && ctx.measureText(last + '\u2026').width > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    lines[maxLines - 1] = last + '\u2026';
+  }
+  ctx.restore();
+  return lines;
+}
+
+/* "From :" / "To :" — a bold label, a ruled line, and the value written on the
+   line, the way the paper form is filled in.
+
+   The value may need two lines: an order whose lines come from three stores
+   prints all three, and clipping that to one line would hide a store and send
+   the picker to the wrong shelf. So it wraps, the rule moves under the last
+   line, and the function returns the y the next block starts from — the caller
+   lays out From and To one after the other without guessing heights. */
+function oirPartyLine(ctx, label, value, x, y, maxWidth) {
+  oirText(ctx, label, x, y, { bold: true, size: 10 });
+
+  ctx.save();
+  ctx.font = 'bold 10px ' + PDF_FONT;
+  var labelW = ctx.measureText(label).width;
+  ctx.restore();
+
+  var lineX = x + labelW + 10;
+  var lineW = Math.min(maxWidth, PDF_PAGE_W - OIR_M - lineX);
+  var lines = oirWrap(ctx, value, lineW - 10, 'bold 10px ' + PDF_FONT, 2);
+  var lastBaseline = y + (lines.length - 1) * OIR_LINE_H;
+
+  ctx.save();
+  ctx.strokeStyle = OIR_RULE;
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(lineX, lastBaseline + 4);
+  ctx.lineTo(lineX + lineW, lastBaseline + 4);
+  ctx.stroke();
+  ctx.restore();
+
+  /* Clipped to its own rule, so a long name cannot spill past the margin. */
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(lineX + 3, y - 12, lineW - 6, lines.length * OIR_LINE_H + 18);
+  ctx.clip();
+  lines.forEach(function (ln, k) {
+    oirText(ctx, ln, lineX + lineW / 2, y + k * OIR_LINE_H,
+      { bold: true, size: 10, align: 'center' });
+  });
+  ctx.restore();
+
+  return lastBaseline + OIR_LINE_H + 8;    /* baseline of the next party line */
+}
+
+/* dd.mm.yyyy — the order the form itself writes dates in. */
+function oirDate(ts) {
+  var d = new Date(Number(ts) || Date.now());
+  return pad2(d.getDate()) + '.' + pad2(d.getMonth() + 1) + '.' + d.getFullYear();
+}
+
+/* Which stores the goods are coming from. Read from the products rather than
+   from the order, because an order line is a snapshot of how a product was
+   NAMED and not of where it sits — stock is moved between stores after the
+   order is written, and the note has to say where to go and pick it up now.
+
+   The snapshot is still the fallback: a restored backup, or a product deleted
+   after the order was raised, leaves the line with no live row to read. */
+function orderSourceLocations(order) {
+  return getAllProductsCached().then(function (all) {
+    var byId = {};
+    all.forEach(function (p) { byId[p.id] = p; });
+
+    var seen = {}, out = [];
+    (order.items || []).forEach(function (line) {
+      var product = byId[line.productId];
+      var loc = String((product && product.location) || line.location || '').trim();
+      if (!loc || seen[loc]) return;
+      seen[loc] = true;
+      out.push(loc);
+    });
+    return out;
+  }).catch(function () { return []; });
+}
+
+function buildOrderRequestPDF(order, docNo, locations) {
+  var scale = PDF_SCALE;
+  var canvas = document.createElement('canvas');
+  canvas.width = Math.round(PDF_PAGE_W * scale);
+  canvas.height = Math.round(PDF_PAGE_H * scale);
+  var ctx = canvas.getContext('2d');
+
+  var pages = [];
+  var pageNo = 0;
+  var usable = PDF_PAGE_W - OIR_M * 2;
+
+  /* A copy, so the shared widths are never mutated by the rounding fix below. */
+  var cols = OIR_COLS.slice();
+  var sum = cols.reduce(function (a, b) { return a + b; }, 0);
+  cols[cols.length - 1] += usable - sum;
+
+  var colX = [], acc = OIR_M;
+  cols.forEach(function (w) { colX.push(acc); acc += w; });
+
+  /* The "From" line may hold more than one store joined with و, and it wraps
+     to a second line if the names are long. The "To" line is the customer the
+     order was raised for. Both are printed on a ruled line the same width. */
+  var fromText = (locations && locations.length)
+    ? locations.join(OIR_LOCATION_JOIN)
+    : '\u2014';
+  var toText = order.customer || '\u2014';
+
+  function beginPage() {
+    pageNo++;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+
+    /* Header: Date and Doc No. only — no User line, no logo box. */
+    var y = 52;
+    oirText(ctx, 'Date', OIR_M, y, { bold: true, size: 10 });
+    oirText(ctx, ': ' + oirDate(order.createdAt), OIR_M + 62, y, { size: 10 });
+    y += 20;
+    oirText(ctx, 'Doc No.', OIR_M, y, { bold: true, size: 10 });
+    oirText(ctx, ': ' + docNo, OIR_M + 62, y, { size: 10 });
+
+    /* Separator rule under the header. */
+    ctx.save();
+    ctx.strokeStyle = OIR_RULE;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(OIR_M, 100);
+    ctx.lineTo(PDF_PAGE_W - OIR_M, 100);
+    ctx.stroke();
+    ctx.restore();
+
+    /* From (product locations) and To (customer). oirPartyLine returns the
+       y for the next line, so the two are laid out sequentially without
+       guessing the height of a multi-store "From". */
+    var afterFrom = oirPartyLine(ctx, 'From :', fromText, OIR_M, 128, usable - 20);
+    var afterTo = oirPartyLine(ctx, 'To :', toText, OIR_M, afterFrom, usable - 20);
+
+    return afterTo + 10;   /* top edge of the table header */
+  }
+
+  function drawTableHead(top) {
+    ctx.save();
+    ctx.fillStyle = '#F1F1F1';
+    ctx.fillRect(OIR_M, top, usable, OIR_HEAD_H);
+    ctx.strokeStyle = OIR_GRID;
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(OIR_M, top, usable, OIR_HEAD_H);
+    ctx.restore();
+
+    OIR_TABLE_LABELS.forEach(function (label, i) {
+      if (i > 0) {
+        ctx.save();
+        ctx.strokeStyle = OIR_GRID;
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(colX[i], top);
+        ctx.lineTo(colX[i], top + OIR_HEAD_H);
+        ctx.stroke();
+        ctx.restore();
+      }
+      var left = (i === 0 || i === 1);
+      oirText(ctx, label, left ? colX[i] + 5 : colX[i] + cols[i] / 2, top + 15,
+        { bold: true, size: 9.5, align: left ? 'left' : 'center' });
+    });
+
+    return top + OIR_HEAD_H;
+  }
+
+  /* No signature block at the bottom — the sheet is an internal issue note
+     and the empty space below the table is left for handwriting. Page numbers
+     still appear when there is more than one page. */
+  function closePage() {
+    if (pageNo > 1) {
+      ctx.save();
+      ctx.fillStyle = '#808080';
+      ctx.font = '7px ' + PDF_FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Page ' + pageNo + '  \u00B7  ' + docNo, PDF_PAGE_W / 2, PDF_PAGE_H - 26);
+      ctx.restore();
+    }
+    pages.push(canvas.toDataURL('image/jpeg', 0.8));
+  }
+
+  var y = beginPage();
+  y = drawTableHead(y);
+
+  /* No signatures to reserve space for — the table runs down to the page
+     margin with just enough room for the page-number line. */
+  var bottomLimit = PDF_PAGE_H - OIR_M - 10;
+
+  (order.items || []).forEach(function (line) {
+    var nameLines = oirWrap(ctx, displayOrderLineName(line), cols[1] - 10,
+      '9.5px ' + PDF_FONT, 2);
+    var rowH = Math.max(OIR_ROW_MIN, nameLines.length * OIR_LINE_H + 7);
+
+    if (y + rowH > bottomLimit) {
+      closePage();
+      y = beginPage();
+      y = drawTableHead(y);
+    }
+
+    ctx.save();
+    ctx.strokeStyle = OIR_GRID;
+    ctx.lineWidth = 0.6;
+    ctx.strokeRect(OIR_M, y, usable, rowH);
+    for (var c = 1; c < cols.length; c++) {
+      ctx.beginPath();
+      ctx.moveTo(colX[c], y);
+      ctx.lineTo(colX[c], y + rowH);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    var mid = y + rowH / 2 + 3.4;
+
+    oirCellText(ctx, line.articleNo ? String(line.articleNo) : '',
+      colX[0] + 5, mid, cols[0] - 10, { size: 9.5 });
+
+    var artTop = y + (rowH - nameLines.length * OIR_LINE_H) / 2 + 9.5;
+    nameLines.forEach(function (ln, k) {
+      oirCellText(ctx, ln, colX[1] + 5, artTop + k * OIR_LINE_H, cols[1] - 10, { size: 9.5 });
+    });
+
+    oirCellText(ctx, formatAmount(line.qty, line.unit), colX[2], mid, cols[2],
+      { bold: true, size: 9.5, align: 'center' });
+    oirCellText(ctx, unitLabelEn(line.unit), colX[3], mid, cols[3],
+      { size: 9.5, align: 'center' });
+
+    y += rowH;
+  });
+
+  closePage();
+
+  return pdfFromJpegPages(pages.map(function (u) {
+    return pdfBase64ToBytes(u.split(',')[1]);
+  }));
+}
+
+/* A document number is stamped once and then belongs to the order: printing
+   the same sheet twice must reproduce the same number, not consume the next
+   one in the series. It is a plain sequential number with no prefix — the
+   sheet carries the date separately. */
+function nextOrderDocNo(order) {
+  return getAllOrdersCached().then(function (orders) {
+    var max = 0;
+    orders.forEach(function (o) {
+      var n = parseInt(String(o.docNo || ''), 10);
+      if (isFinite(n) && n > max) max = n;
+    });
+    return String(max + 1).padStart(5, '0');
+  });
+}
+
+function ensureOrderDocNo(order) {
+  if (order.docNo) return Promise.resolve(order.docNo);
+  return nextOrderDocNo(order).then(function (docNo) {
+    order.docNo = docNo;
+    return putOrder(Object.assign({}, order, { docNo: docNo })).then(function () {
+      return docNo;
+    });
+  });
+}
+
+function exportOrderPDF(orderId) {
+  if (!orderId) return Promise.resolve();
+  return getAllOrdersCached().then(function (orders) {
+    var order = orders.filter(function (o) { return o.id === orderId; })[0];
+    if (!order) { showToast('هذا الطلب لم يعد موجوداً'); return; }
+    if (!(order.items || []).length) { showToast('هذا الطلب بلا أصناف'); return; }
+
+    return ensureOrderDocNo(order).then(function (docNo) {
+      /* JPEG encoding a full A4 page is synchronous and takes a moment on a
+         phone, so the toast gets to paint before the work starts. The
+         locations are read from live products so the sheet says where stock
+         is NOW, not where it was when the order was raised. */
+      showToast('جارٍ تجهيز ملف PDF…');
+      orderSourceLocations(order).then(function (locations) {
+        setTimeout(function () {
+          try {
+            shareOrDownloadPDF(buildOrderRequestPDF(order, docNo, locations),
+              'IssueRequest_' + docNo + '.pdf');
+          } catch (err) {
+            console.error(err);
+            showToast('تعذّر إنشاء ملف PDF');
+          }
+        }, 30);
+      });
+    }).catch(function (err) {
+      console.error(err);
+      showToast('تعذّر تجهيز ورقة الطلب');
+    });
   });
 }
 
@@ -5963,13 +6388,20 @@ function renderOrderDetails() {
         '</div>';
     }).join('');
 
+    /* The sheet is printable in both states: a finished order is exactly the
+       document that gets filed, and an open one is the request being sent. */
+    var printBtn = '<button class="btn btn-primary btn-block" data-action="print-order-pdf" ' +
+        'data-order-id="' + esc(order.id) + '">🖨️ طباعة PDF</button>';
+
     var buttons = done
-      ? '<div class="order-badge done" style="display:block;text-align:center;padding:11px;margin-top:15px">✅ تم إتمام الطلب وخُصمت الكميات</div>' +
+      ? '<div class="stack" style="margin-top:15px">' + printBtn + '</div>' +
+        '<div class="order-badge done" style="display:block;text-align:center;padding:11px;margin-top:9px">✅ تم إتمام الطلب وخُصمت الكميات</div>' +
         '<button class="btn btn-ghost btn-block" style="margin-top:9px" data-action="delete-order" ' +
           'data-order-id="' + esc(order.id) + '">🗑️ حذف الطلب</button>'
       : '<div class="stack" style="margin-top:15px">' +
           '<button class="btn btn-success btn-block" data-action="complete-order" ' +
             'data-order-id="' + esc(order.id) + '">✅ إتمام الطلب وخصم الكميات</button>' +
+          printBtn +
           '<button class="btn btn-outline btn-block" data-action="edit-order" ' +
             'data-order-id="' + esc(order.id) + '">✏️ تعديل الطلب</button>' +
           '<button class="btn btn-danger btn-block" data-action="delete-order" ' +
@@ -6636,6 +7068,7 @@ var ACTIONS = {
   },
   'save-order': function () { saveOrder(); },
   'complete-order': function (el) { completeOrder(el.dataset.orderId); },
+  'print-order-pdf': function (el) { exportOrderPDF(el.dataset.orderId); },
   'delete-order': function (el) { deleteOrderById(el.dataset.orderId); },
   'add-order-line': function (el) { addOrderLine(el.dataset.productId); },
   'remove-order-line': function (el) { removeOrderLine(el.dataset.productId); },
