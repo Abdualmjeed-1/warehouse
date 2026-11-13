@@ -283,6 +283,27 @@ button,input,select,textarea{font-family:inherit}
 .pick-item-name{font-size:13.5px;font-weight:600;color:var(--gray-dark);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pick-item-meta{font-size:11px;color:var(--gray);margin-top:2px;font-variant-numeric:tabular-nums}
 
+/* ---------- Receiving goods ----------
+   The button that sits in the header, and the sheet it opens. A delivery
+   arrives as a list, so the sheet is a list too: every line puts the arriving
+   amount next to what is already on the shelf, because the number about to be
+   typed is always read against the one that is already there. */
+.header-action{display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:11px;border:1px solid rgba(255,255,255,.45);background:rgba(255,255,255,.18);color:#fff;font-family:inherit;font-size:12.5px;font-weight:600;line-height:1;cursor:pointer;flex-shrink:0;-webkit-appearance:none;appearance:none;touch-action:manipulation}
+.header-action:active{background:rgba(255,255,255,.32)}
+.header-action .ha-icon{font-size:14px;line-height:1}
+.rcv-line{background:#F5F7F9;border-radius:11px;padding:10px 11px;margin-bottom:9px}
+.rcv-line-top{display:flex;align-items:flex-start;gap:8px}
+.rcv-line-info{flex:1;min-width:0}
+.rcv-line-name{font-size:13.5px;font-weight:600;color:var(--gray-dark);overflow-wrap:anywhere}
+.rcv-line-meta{font-size:11px;color:var(--gray);margin-top:3px;font-variant-numeric:tabular-nums;line-height:1.5}
+.rcv-line-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+.rcv-field{min-width:0}
+.rcv-field-label{display:block;font-size:10.5px;color:var(--gray);margin-bottom:4px}
+.rcv-qty-wrap{display:flex;align-items:center;gap:6px}
+.rcv-qty-wrap .order-qty-input{width:auto;min-width:0;flex:1 1 auto}
+.rcv-date-input{display:block;width:100%;min-width:0;padding:8px 7px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-size:12px;background:#fff;color:#1F2937;-webkit-appearance:none;appearance:none}
+.rcv-date-input:focus{outline:none;border-color:var(--primary)}
+
 /* ---------- Reading an order sheet from a photo ----------
    The review list is the whole point of this feature: the reader is good but
    not perfect, and a wrong quantity deducts the wrong stock. Every row it read
@@ -377,6 +398,14 @@ button,input,select,textarea{font-family:inherit}
       <h1>📦 إدارة المستودع</h1>
       <div class="header-sub" id="header-sub">جاهز</div>
     </div>
+    <!-- Receiving sits in the header on purpose: a delivery is not a product,
+         it is a batch of them, and the moment it arrives is the moment the
+         user is standing at the shelf — not scrolling a list looking for the
+         row to edit. -->
+    <button class="header-action" data-action="receive-goods" aria-label="استلام بضاعة">
+      <span class="ha-icon" aria-hidden="true">📥</span>
+      <span>استلام بضاعة</span>
+    </button>
   </div>
   <div class="stats">
     <div class="stat" id="stat-total-box">
@@ -766,6 +795,42 @@ button,input,select,textarea{font-family:inherit}
   </div>
 </div>
 
+<!-- Receive goods: the delivery as a list, added to stock in one tap -->
+<div id="receipt-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="font-size:16.5px">📥 استلام بضاعة</h2>
+      <button class="close-btn" data-action="close-modal" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="receipt-date">تاريخ الاستلام</label>
+        <input type="date" id="receipt-date" class="form-input">
+        <span class="form-hint">هذا تاريخ الدخول الذي يُكتب على كل صنف تستلمه الآن.</span>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="receipt-search">أضف صنفاً وصل</label>
+        <div class="input-group">
+          <input type="text" id="receipt-search" class="form-input" placeholder="اكتب الاسم أو رقم الصنف أو الباركود..." autocomplete="off" enterkeyhint="search">
+          <button class="btn btn-outline btn-icon" data-action="scan-receipt-line" aria-label="مسح الباركود">📷</button>
+        </div>
+        <span class="form-hint">نفس بحث المخزون — ويشمل الأصناف التي وصلت كميتها صفراً حتى تعود للرف.</span>
+      </div>
+      <div id="receipt-pick-results"></div>
+
+      <div class="divider"></div>
+      <div class="form-label" style="margin-bottom:8px">البضاعة الواصلة <span id="receipt-lines-count"></span></div>
+      <div id="receipt-lines"></div>
+
+      <div class="stack" style="margin-top:15px">
+        <button class="btn btn-success btn-block" data-action="save-receipt">✅ أضف الكميات للمخزون</button>
+        <button class="btn btn-ghost btn-block" data-action="clear-receipt">🗑️ إفراغ القائمة</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Article editor (add / edit a row of the accounting list by hand) -->
 <div id="article-modal" class="modal">
   <div class="modal-content">
@@ -886,7 +951,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.16.0';
+var APP_VERSION = '2.17.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -4791,6 +4856,22 @@ function handleScan(code) {
     });
   }
 
+  /* Scanning a delivery. Same answer as the order line: the barcode names a
+     product the warehouse already holds. A label the app has never met is not
+     a product yet, and receiving it here would mean inventing the rest of the
+     row — name, unit, article — from a number. */
+  if (scannerTarget === 'receipt-line') {
+    closeModal('scanner-modal');
+    if (!receiptDraft) { showToast('افتح شاشة الاستلام أولاً'); return; }
+    return getProductByBarcode(code).then(function (found) {
+      if (!found) { showToast('ما فيه صنف في المخزون بهذا الباركود: ' + code); return; }
+      return addReceiptLine(found.id);
+    }).catch(function (e) {
+      console.error(e);
+      showToast('حدث خطأ أثناء البحث');
+    });
+  }
+
   /* Scanning from the orders tab: the barcode finds the product, and the
      product finds the order it was ordered on. */
   if (scannerTarget === 'order-search') {
@@ -7744,6 +7825,323 @@ function deleteOrderById(orderId) {
   });
 }
 
+/* ===================== Receiving goods =====================
+   The other direction of the order flow. A delivery arrives with a list on it
+   and every line has to land on the shelf. Doing that through the product
+   sheet means opening it, finding the row, reading the quantity that is
+   already there, adding the new one and saving — once per line, with the
+   arithmetic done by hand every time. This sheet takes the delivery as a list
+   instead: search, type the arriving amount, repeat, then one tap writes them
+   all.
+
+   It obeys the same rules as the rest of the app. The quantity is the source
+   of truth — a row with stock is on the shelf, a row at zero is in the archive
+   — so receiving onto an archived row is exactly how stock comes back, and the
+   archive flag is cleared in the same write that raises the number. Dates
+   belong to the row that holds the stock, so a new expiry given here also
+   stamps a new entry date. Every line leaves a history entry naming the
+   receipt and its date, which is what answers "where did these 30 come from?"
+   a month later. */
+
+var receiptDraft = null;      /* { date: 'YYYY-MM-DD', lines: [...] } */
+var receiptPickTerm = '';
+
+function openReceipt() {
+  if (!receiptDraft) receiptDraft = { date: todayISO(), lines: [] };
+  if (!receiptDraft.date) receiptDraft.date = todayISO();
+  receiptPickTerm = '';
+  $('receipt-date').value = receiptDraft.date;
+  $('receipt-search').value = '';
+  var pick = $('receipt-pick-results');
+  if (pick) pick.innerHTML = '';
+  renderReceiptLines();
+  openModal('receipt-modal');
+}
+
+function receiptLineMeta(line) {
+  var bits = ['المتوفر ' + formatQty(line.have, line.unit)];
+  if (line.articleNo) bits.push('رقم الصنف ' + line.articleNo);
+  if (line.haveExpiry) bits.push('الانتهاء ' + fmtDate(line.haveExpiry));
+  return bits.join(' · ');
+}
+
+function renderReceiptLines() {
+  var host = $('receipt-lines');
+  if (!host) return;
+  var lines = receiptDraft ? receiptDraft.lines : [];
+
+  var count = $('receipt-lines-count');
+  if (count) {
+    count.textContent = lines.length
+      ? '(' + lines.length + ' ' + plural(lines.length, 'صنف', 'صنفان', 'أصناف') + ')'
+      : '';
+    count.style.cssText = 'font-size:12px;color:var(--gray);margin:0';
+  }
+
+  if (!lines.length) {
+    host.innerHTML = '<div class="form-hint" style="margin:0">ما وصل شيء بعد — ابحث فوق عن الصنف، أو امسح باركوده.</div>';
+    return;
+  }
+
+  host.innerHTML = lines.map(function (line) {
+    var decimals = unitInfo(line.unit).decimals;
+    return '<div class="rcv-line">' +
+        '<div class="rcv-line-top">' +
+          '<div class="rcv-line-info">' +
+            '<div class="rcv-line-name">' + esc(line.name || 'صنف بلا اسم') + '</div>' +
+            '<div class="rcv-line-meta">' + esc(receiptLineMeta(line)) + '</div>' +
+          '</div>' +
+          '<button class="btn btn-ghost btn-sm" data-action="remove-receipt-line" ' +
+            'data-product-id="' + esc(line.productId) + '" aria-label="حذف الصنف">✕</button>' +
+        '</div>' +
+        '<div class="rcv-line-fields">' +
+          '<div class="rcv-field">' +
+            '<span class="rcv-field-label">الكمية الواصلة</span>' +
+            '<div class="rcv-qty-wrap">' +
+              '<input type="number" class="order-qty-input" data-action="receipt-line-qty" ' +
+                'data-product-id="' + esc(line.productId) + '" value="' + esc(formatAmount(line.qty, line.unit)) + '" ' +
+                'min="0" step="' + (decimals === 0 ? '1' : '0.01') + '" inputmode="decimal">' +
+              '<span class="order-unit">' + esc(unitLabelEn(line.unit)) + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="rcv-field">' +
+            '<span class="rcv-field-label">الانتهاء (اختياري)</span>' +
+            '<input type="date" class="rcv-date-input" data-action="receipt-line-expiry" ' +
+              'data-product-id="' + esc(line.productId) + '" value="' + esc(line.expiry || '') + '">' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }).join('');
+}
+
+/* The picker. The same matcher as the home search and the order picker, so a
+   product is found here by exactly the four things it is found by there. It
+   deliberately searches the ARCHIVED rows too: a row at zero is off the shelf,
+   and a delivery is precisely how it comes back. */
+function renderReceiptPickResults() {
+  var host = $('receipt-pick-results');
+  if (!host) return Promise.resolve();
+
+  var term = (receiptPickTerm || '').trim().toLowerCase();
+  if (!term) { host.innerHTML = ''; return Promise.resolve(); }
+
+  return getAllProductsCached().then(function (all) {
+    var hits = all.filter(function (p) { return productMatchesTerm(p, term); }).slice(0, 8);
+    if (!hits.length) {
+      host.innerHTML = '<div class="form-hint" style="margin:0 0 9px">ما لقيت صنفاً مطابقاً في المخزون — ' +
+        'إن كان جديداً أضفه من زر «➕ إضافة منتج»، وقائمتك هنا تبقى كما هي.</div>';
+      return;
+    }
+    host.innerHTML = hits.map(function (p) {
+      var already = receiptDraft && receiptDraft.lines.filter(function (l) {
+        return l.productId === p.id;
+      }).length;
+      return '<div class="pick-item" data-action="add-receipt-line" data-product-id="' + esc(p.id) + '">' +
+          '<div class="pick-item-info">' +
+            '<div class="pick-item-name">' + esc(displayName(p)) + '</div>' +
+            '<div class="pick-item-meta">' +
+              (p.articleNo ? 'رقم الصنف ' + esc(String(p.articleNo)) + ' · ' : '') +
+              (isArchived(p)
+                ? 'في الأرشيف — الكمية صفر'
+                : 'المتوفر ' + esc(formatQty(p.quantity, unitOf(p)))) +
+            '</div>' +
+          '</div>' +
+          '<span class="pick-add">' + (already ? '＋ زيادة' : '＋ إضافة') + '</span>' +
+        '</div>';
+    }).join('');
+  });
+}
+
+/* A product already on the list is raised instead of written twice — two lines
+   for one product would add the amount twice on save, and there would be no
+   way to tell which of the two was the mistake. */
+function addReceiptLine(productId) {
+  if (!receiptDraft) receiptDraft = { date: todayISO(), lines: [] };
+  return getProduct(productId).then(function (p) {
+    if (!p) { showToast('هذا المنتج لم يعد موجوداً'); return; }
+    var existing = receiptDraft.lines.filter(function (l) { return l.productId === productId; })[0];
+    var step = unitInfo(unitOf(p)).step;
+    if (existing) {
+      existing.qty = roundQty((Number(existing.qty) || 0) + step, unitInfo(existing.unit).decimals);
+      showToast('تمت زيادة الكمية');
+    } else {
+      receiptDraft.lines.push({
+        productId: p.id,
+        name: displayName(p) || p.name || '',
+        articleNo: p.articleNo ? String(p.articleNo).trim() : '',
+        unit: unitOf(p),
+        have: Number(p.quantity) || 0,
+        haveExpiry: p.expiryDate || '',
+        qty: step,
+        expiry: ''
+      });
+      showToast('أُضيف للقائمة — اكتب الكمية الواصلة');
+    }
+    renderReceiptLines();
+  });
+}
+
+function setReceiptLineQty(productId, raw) {
+  if (!receiptDraft) return;
+  var line = receiptDraft.lines.filter(function (l) { return l.productId === productId; })[0];
+  if (!line) return;
+  var decimals = unitInfo(line.unit).decimals;
+  var n = Number(String(raw).replace(',', '.'));
+  line.qty = isFinite(n) && n > 0 ? roundQty(n, decimals) : 0;
+}
+
+function setReceiptLineExpiry(productId, value) {
+  if (!receiptDraft) return;
+  var line = receiptDraft.lines.filter(function (l) { return l.productId === productId; })[0];
+  if (!line) return;
+  line.expiry = value || '';
+}
+
+function removeReceiptLine(productId) {
+  if (!receiptDraft) return;
+  receiptDraft.lines = receiptDraft.lines.filter(function (l) { return l.productId !== productId; });
+  renderReceiptLines();
+}
+
+function clearReceiptDraft() {
+  if (!receiptDraft || !receiptDraft.lines.length) { showToast('القائمة فاضية'); return; }
+  if (!confirm('إفراغ قائمة الاستلام؟\n\nلن يُحفظ شيء، ولن تتغير أي كمية في المخزون.')) return;
+  receiptDraft = { date: $('receipt-date').value || todayISO(), lines: [] };
+  receiptPickTerm = '';
+  $('receipt-search').value = '';
+  $('receipt-pick-results').innerHTML = '';
+  renderReceiptLines();
+}
+
+/* All-or-nothing, like completing an order. A receipt that stops halfway
+   leaves the user counting which of the lines already landed, and the count on
+   the shelf stops being trustworthy — which is the one thing this app exists
+   to keep true. So the whole list is checked first, then written in a single
+   transaction over products and history together. */
+function saveReceipt() {
+  if (!receiptDraft || !receiptDraft.lines.length) {
+    showToast('القائمة فاضية — أضف صنفاً أولاً');
+    return Promise.resolve();
+  }
+  var date = $('receipt-date').value || receiptDraft.date || todayISO();
+  receiptDraft.date = date;
+
+  var bad = receiptDraft.lines.filter(function (l) {
+    var q = Number(l.qty);
+    return !isFinite(q) || q <= 0 || (unitInfo(l.unit).decimals === 0 && q % 1 !== 0);
+  });
+  if (bad.length) {
+    alert('راجع الكميات — هذه الأصناف كميتها غير صحيحة:\n\n' +
+      bad.map(function (l) { return '• ' + l.name; }).join('\n') +
+      '\n\nلم يُضف شيء.');
+    showToast('لم تُضف الكميات — راجع الكميات');
+    return Promise.resolve();
+  }
+
+  var earlyExpiry = receiptDraft.lines.filter(function (l) {
+    return l.expiry && parseDateOnly(l.expiry) < parseDateOnly(date);
+  });
+  if (earlyExpiry.length) {
+    alert('تاريخ الانتهاء لا يمكن أن يسبق تاريخ الاستلام:\n\n' +
+      earlyExpiry.map(function (l) { return '• ' + l.name + ' — ' + fmtDate(l.expiry); }).join('\n'));
+    showToast('لم تُضف الكميات — راجع التواريخ');
+    return Promise.resolve();
+  }
+
+  return getAllProductsCached().then(function (all) {
+    var byId = {};
+    all.forEach(function (p) { byId[p.id] = p; });
+
+    var updates = [], gone = [];
+    receiptDraft.lines.forEach(function (line) {
+      var p = byId[line.productId];
+      if (!p) { gone.push(line); return; }
+
+      var copy = Object.assign({}, p);
+      var decimals = unitInfo(unitOf(copy)).decimals;
+      var have = Number(copy.quantity) || 0;
+      var add = roundQty(Number(line.qty) || 0, decimals);
+      var newQty = roundQty(have + add, decimals);
+
+      copy.quantity = newQty;
+      /* Zero is what puts a row in the archive, so raising the number is what
+         takes it out. Clearing the flag here — in the same write — means the
+         row can never be seen on the shelf still stamped as archived. */
+      if (have <= 0) delete copy.archivedAt;
+      /* The dates describe the stock that is on the row. A restored row and a
+         row given a new expiry are both describing this delivery now, so the
+         entry date moves with them; a row keeping its old expiry keeps the
+         entry date that belongs to it. */
+      if (have <= 0 || line.expiry || !copy.entryDate) copy.entryDate = date;
+      if (line.expiry) copy.expiryDate = line.expiry;
+
+      updates.push({
+        copy: copy,
+        oldQty: have,
+        newQty: newQty,
+        add: add,
+        restored: have <= 0
+      });
+    });
+
+    if (!updates.length) {
+      showToast('هذه الأصناف لم تعد موجودة في المخزون');
+      return;
+    }
+
+    var now = Date.now();
+    var entries = updates.map(function (u) {
+      return {
+        productId: u.copy.id,
+        action: 'استلام بضاعة ' + fmtDate(date) + ' — ' +
+          (u.restored ? 'إعادة للمخزون ' : 'إضافة ') + formatQty(u.add, unitOf(u.copy)),
+        oldQty: u.oldQty,
+        newQty: u.newQty,
+        timestamp: now
+      };
+    });
+
+    return new Promise(function (resolve, reject) {
+      var transaction = tx(['products', 'history'], 'readwrite');
+      var products = transaction.objectStore('products');
+      var history = transaction.objectStore('history');
+      updates.forEach(function (u) { products.put(u.copy); });
+      entries.forEach(function (e) { history.add(e); });
+      transaction.oncomplete = function () { resolve(); };
+      transaction.onerror = function () { reject(transaction.error); };
+      transaction.onabort = function () { reject(transaction.error); };
+    }).then(function () {
+      invalidateProducts();
+      var restored = updates.filter(function (u) { return u.restored; }).length;
+      var countText = updates.length === 1 ? 'صنف واحد'
+        : updates.length === 2 ? 'صنفين'
+        : updates.length + ' أصناف';
+      receiptDraft = null;
+      closeModal('receipt-modal');
+      showToast('تمت إضافة ' + countText + ' للمخزون' +
+        (restored ? (restored === 1 ? '، وواحد رجع من الأرشيف' : '، و' + restored + ' رجعوا من الأرشيف') : '') +
+        (gone.length ? ' — و' + gone.length + ' لم يوجد' : ''));
+      return refreshAfterReceipt();
+    });
+  }).catch(function (error) {
+    console.error(error);
+    showToast('حدث خطأ أثناء إضافة الكميات');
+  });
+}
+
+/* The button lives in the header, so it can be tapped from any tab. Whatever
+   tab is showing has to agree with the shelf afterwards, not only the home
+   list. */
+function refreshAfterReceipt() {
+  var jobs = [renderProducts(), renderWarnings()];
+  var active = document.querySelector('.page.active');
+  var id = active ? active.id : '';
+  if (id === 'locations-page') jobs.push(renderLocationPage());
+  if (id === 'archive-page') jobs.push(renderArchivePage());
+  if (id === 'orders-page') jobs.push(renderOrdersPage());
+  return Promise.all(jobs).catch(function (error) { console.error(error); });
+}
+
 /* ===================== Locations page =====================
    One card per storage location: how much is in it and what it is. Products
    are grouped by the location string on the row rather than by the settings
@@ -8284,6 +8682,14 @@ var ACTIONS = {
   'clear-order-search': function () { $('order-search-input').value = ''; renderOrdersPage(); },
   'scan-order-barcode': function () { openScanner('order-search'); },
   'scan-order-line': function () { openScanner('order-line'); },
+
+  /* ---- Receiving goods ---- */
+  'receive-goods': function () { openReceipt(); },
+  'save-receipt': function () { saveReceipt(); },
+  'clear-receipt': function () { clearReceiptDraft(); },
+  'add-receipt-line': function (el) { addReceiptLine(el.dataset.productId); },
+  'remove-receipt-line': function (el) { removeReceiptLine(el.dataset.productId); },
+  'scan-receipt-line': function () { openScanner('receipt-line'); },
   'show-more': function () { showMoreProducts(); },
   'show-archive': function () { showArchivedHistory(); },
   'archive-now': function () { runArchiveSweep(true); },
@@ -8496,6 +8902,26 @@ function wireUp() {
     if (el && el.dataset && el.dataset.action === 'order-line-qty') {
       setOrderLineQty(el.dataset.productId, el.value);
       renderOrderLines();
+    }
+  });
+
+  /* ---- Receiving goods ---- */
+  $('receipt-search').addEventListener('input', function () {
+    receiptPickTerm = this.value;
+    renderReceiptPickResults();
+  });
+  $('receipt-date').addEventListener('change', function () {
+    if (receiptDraft) receiptDraft.date = this.value;
+  });
+  $('receipt-lines').addEventListener('change', function (event) {
+    var el = event.target;
+    if (!el || !el.dataset) return;
+    if (el.dataset.action === 'receipt-line-qty') {
+      setReceiptLineQty(el.dataset.productId, el.value);
+      renderReceiptLines();
+    }
+    if (el.dataset.action === 'receipt-line-expiry') {
+      setReceiptLineExpiry(el.dataset.productId, el.value);
     }
   });
 
