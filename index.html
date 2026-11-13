@@ -304,6 +304,34 @@ button,input,select,textarea{font-family:inherit}
 .rcv-date-input{display:block;width:100%;min-width:0;padding:8px 7px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-size:12px;background:#fff;color:#1F2937;-webkit-appearance:none;appearance:none}
 .rcv-date-input:focus{outline:none;border-color:var(--primary)}
 
+/* The invoice is optional, so its empty state has to look like an invitation
+   rather than a required field that was left blank. */
+.rcv-inv-add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:15px 12px;border:1.5px dashed #C3CFDC;border-radius:11px;background:#FAFBFD;color:#5B6B7C;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;-webkit-appearance:none;appearance:none}
+.rcv-inv-add:active{background:#F1F5F9}
+.rcv-inv-img{display:block;width:100%;max-height:150px;object-fit:contain;background:#F1F5F9;border:1px solid var(--border);border-radius:11px;cursor:zoom-in}
+.rcv-inv-tools{display:flex;gap:8px;margin-top:8px}
+.rcv-inv-tools .btn{flex:1;padding:8px 10px;font-size:12.5px;border-radius:9px}
+.rcv-inv-note{font-size:11.5px;color:var(--gray);margin-top:8px;line-height:1.65}
+
+/* ---------- Receipts inside the archive ---------- */
+.arch-head{display:flex;align-items:center;gap:8px;margin:20px 0 10px;font-size:14px;font-weight:700;color:#374151}
+.arch-head .count-chip{margin:0}
+.rcv-rec{display:flex;gap:11px;align-items:center;padding:11px 12px;background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:9px;cursor:pointer;transition:transform .12s}
+.rcv-rec:active{transform:scale(.985)}
+.rcv-rec-thumb{width:56px;height:56px;flex:0 0 auto;border-radius:10px;background:#EEF1F5;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:23px;overflow:hidden}
+.rcv-rec-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.rcv-rec-body{flex:1;min-width:0}
+.rcv-rec-title{font-size:14px;font-weight:700;color:var(--gray-dark)}
+.rcv-rec-meta{font-size:11.5px;color:var(--gray);margin-top:3px;font-variant-numeric:tabular-nums}
+.rcv-rec-items{font-size:11.5px;color:#5B6B7C;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rcv-rec-lines{margin-top:4px}
+.rcv-det-line{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border)}
+.rcv-det-line:first-child{border-top:0}
+.rcv-det-info{flex:1;min-width:0}
+.rcv-det-name{font-size:13.5px;font-weight:600;color:var(--gray-dark);overflow-wrap:anywhere}
+.rcv-det-meta{font-size:11px;color:var(--gray);margin-top:2px;font-variant-numeric:tabular-nums}
+.rcv-det-qty{font-size:13px;font-weight:700;color:#256B2B;flex-shrink:0;font-variant-numeric:tabular-nums}
+
 /* ---------- Reading an order sheet from a photo ----------
    The review list is the whole point of this feature: the reader is good but
    not perfect, and a wrong quantity deducts the wrong stock. Every row it read
@@ -810,6 +838,11 @@ button,input,select,textarea{font-family:inherit}
       </div>
 
       <div class="form-group">
+        <label class="form-label">صورة الفاتورة (اختياري)</label>
+        <div id="receipt-invoice"></div>
+      </div>
+
+      <div class="form-group">
         <label class="form-label" for="receipt-search">أضف صنفاً وصل</label>
         <div class="input-group">
           <input type="text" id="receipt-search" class="form-input" placeholder="اكتب الاسم أو رقم الصنف أو الباركود..." autocomplete="off" enterkeyhint="search">
@@ -828,6 +861,17 @@ button,input,select,textarea{font-family:inherit}
         <button class="btn btn-ghost btn-block" data-action="clear-receipt">🗑️ إفراغ القائمة</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Receipt details: the invoice photo and what arrived on it -->
+<div id="receipt-details-modal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 style="font-size:16.5px">تفاصيل الاستلام</h2>
+      <button class="close-btn" data-action="close-modal" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="modal-body" id="receipt-details-body"></div>
   </div>
 </div>
 
@@ -892,6 +936,10 @@ button,input,select,textarea{font-family:inherit}
      night is just as good as one photographed now. -->
 <input type="file" id="paper-photo" accept="image/*" hidden>
 
+<!-- The delivery invoice. Same bare accept as the paper photo: camera or
+     library, whichever the user has the invoice in. -->
+<input type="file" id="receipt-photo" accept="image/*" hidden>
+
 <!-- ===== Review what was read off the order sheet =====
      Nothing reaches the order until the user taps add: the reader is good, not
      perfect, and a wrong quantity silently deducts the wrong stock. -->
@@ -951,7 +999,7 @@ button,input,select,textarea{font-family:inherit}
 'use strict';
 
 /* ===================== Constants ===================== */
-var APP_VERSION = '2.17.0';
+var APP_VERSION = '2.18.0';
 var DB_NAME = 'WarehouseDB';
 /* v4 adds `historyArchive`. The history store is scanned by product on every
    detail view, so letting it grow without limit slowly taxes every open. A
@@ -964,7 +1012,10 @@ var DB_NAME = 'WarehouseDB';
    not a product, so it cannot live in `products` without inventing a second
    kind of row that every existing screen would then have to filter out. It is
    its own store, read whole on open like `history`. */
-var DB_VERSION = 6;
+/* v7 adds `receipts` — the deliveries that came in, with the invoice photo the
+   user attached. Same reasoning as `orders`, in the opposite direction: what
+   arrived is a document with lines on it, not a change to one product. */
+var DB_VERSION = 7;
 var SETTINGS_KEY = 'tios:settings';
 var ARCHIVE_AFTER_DAYS = 365;
 /* 256 px, not 400. Every thumbnail is stored as a base64 JPEG inside IndexedDB,
@@ -984,6 +1035,9 @@ var IMG_QUALITY = 0.72;
    before this — simply opens its thumbnail instead; nothing breaks. */
 var PHOTO_MAX = 1200;
 var PHOTO_QUALITY = 0.75;
+/* An invoice is a document: kept larger than a product photo because what is
+   wanted from it is the small print, not the silhouette. */
+var INVOICE_MAX = 1800;
 /* Six, not unlimited. Every photo is a base64 JPEG sitting in the same IndexedDB
    record as the product, so the record is read whole on every open of the
    details sheet — a dozen photos would make that read slow for no gain. Six
@@ -1791,6 +1845,16 @@ function openDB() {
          way `history` is. */
       if (!database.objectStoreNames.contains('orders')) {
         database.createObjectStore('orders', { keyPath: 'id' });
+      }
+
+      /* v7. Deliveries that were received. One row per receipt, not per
+         product: the invoice belongs to the delivery, and the products that
+         arrived on it are its lines. Storing the lines as a snapshot rather
+         than pointing at the live rows is deliberate — a receipt is a record
+         of what happened that day, and it must still read correctly after the
+         product has been renamed, re-priced or deleted. */
+      if (!database.objectStoreNames.contains('receipts')) {
+        database.createObjectStore('receipts', { keyPath: 'id' });
       }
     };
   });
@@ -2865,6 +2929,38 @@ function putManyOrders(items) {
   });
 }
 
+/* ---- Receipts (deliveries that came in) ---------------------------------
+   Read whole, newest first, same as orders: a warehouse takes deliveries in
+   tens, not thousands, and every screen that shows one shows the list. */
+function getAllReceipts() {
+  return reqPromise(tx(['receipts'], 'readonly').objectStore('receipts').getAll())
+    .then(function (rows) {
+      return rows.sort(function (a, b) {
+        return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+      });
+    });
+}
+
+function getReceipt(id) {
+  return reqPromise(tx(['receipts'], 'readonly').objectStore('receipts').get(id));
+}
+
+function deleteReceiptFromDB(id) {
+  return reqPromise(tx(['receipts'], 'readwrite').objectStore('receipts').delete(id));
+}
+
+function putManyReceipts(items) {
+  return new Promise(function (resolve, reject) {
+    if (!items.length) return resolve(0);
+    var transaction = tx(['receipts'], 'readwrite');
+    var store = transaction.objectStore('receipts');
+    items.forEach(function (item) { store.put(item); });
+    transaction.oncomplete = function () { resolve(items.length); };
+    transaction.onerror = function () { reject(transaction.error); };
+    transaction.onabort = function () { reject(transaction.error); };
+  });
+}
+
 /* Move every move older than ARCHIVE_AFTER_DAYS out of the live store.
    One readwrite transaction across both stores, so a crash halfway cannot
    leave a row duplicated or missing. `put` into the archive is keyed by the
@@ -2913,12 +3009,13 @@ function clearCachedLookups() {
 
 function clearAllStores() {
   return new Promise(function (resolve, reject) {
-    var transaction = tx(['products', 'history', 'historyArchive', 'lookup', 'orders'], 'readwrite');
+    var transaction = tx(['products', 'history', 'historyArchive', 'lookup', 'orders', 'receipts'], 'readwrite');
     transaction.objectStore('products').clear();
     transaction.objectStore('history').clear();
     transaction.objectStore('historyArchive').clear();
     transaction.objectStore('lookup').clear();
     transaction.objectStore('orders').clear();
+    transaction.objectStore('receipts').clear();
     invalidateOrders();
     transaction.oncomplete = function () { resolve(); };
     transaction.onerror = function () { reject(transaction.error); };
@@ -3375,6 +3472,9 @@ var viewerState = null;
 
 function viewerSources() {
   if (!viewerState) return [];
+  /* An invoice is one document with no cover and no siblings, so the tools
+     strip has nothing to offer and is hidden while it is on show. */
+  if (viewerState.mode === 'invoice') return invoiceViewSrc ? [invoiceViewSrc] : [];
   if (viewerState.mode === 'form') {
     return pendingImages.map(function (thumb, i) { return pendingPhotos[i] || thumb; });
   }
@@ -3424,6 +3524,9 @@ function renderPhotoViewer() {
      cover — on the first photo it is a no-op that would look broken. */
   var cover = document.querySelector('[data-action="viewer-cover"]');
   if (cover) cover.style.visibility = viewerState.index === 0 ? 'hidden' : '';
+
+  var tools = document.querySelector('.pv-tools');
+  if (tools) tools.style.display = viewerState.mode === 'invoice' ? 'none' : '';
 }
 
 function viewerStep(delta) {
@@ -4143,8 +4246,10 @@ function handlePhotoFile(file) {
 
 /* Two renditions of the same file, in one decode:
    `thumb` is the square 256 px the lists draw, `full` is the same photo at up
-   to 1200 px for the viewer — uncropped, so what is opened is what was shot. */
-function makePhoto(file) {
+   to 1200 px for the viewer — uncropped, so what is opened is what was shot.
+   `maxPx` raises that ceiling for the one caller that needs it: an invoice. */
+function makePhoto(file, maxPx) {
+  var cap = maxPx || PHOTO_MAX;
   return new Promise(function (resolve, reject) {
     var finish = function (source, width, height) {
       try {
@@ -4157,7 +4262,7 @@ function makePhoto(file) {
         tctx.fillRect(0, 0, IMG_SIZE, IMG_SIZE);
         tctx.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, IMG_SIZE, IMG_SIZE);
 
-        var scale = Math.min(1, PHOTO_MAX / Math.max(width, height));
+        var scale = Math.min(1, cap / Math.max(width, height));
         var fullCanvas = document.createElement('canvas');
         fullCanvas.width = Math.max(1, Math.round(width * scale));
         fullCanvas.height = Math.max(1, Math.round(height * scale));
@@ -6365,7 +6470,10 @@ function createBackup(includeImages) {
        it looks complete, and the loss is only discovered on the day it is
        needed. A failure to read them is reported as empty rather than allowed
        to fail the whole backup. */
-    getAllOrders().catch(function () { return []; })
+    getAllOrders().catch(function () { return []; }),
+    /* Same reasoning for the receipts — and they carry the only copy of the
+       invoice photos, which exist nowhere else. */
+    getAllReceipts().catch(function () { return []; })
   ])
     .then(function (res) {
     var products = res[0];
@@ -6385,6 +6493,12 @@ function createBackup(includeImages) {
         return copy;
       });
     }
+    var receipts = includeImages ? res[4] : res[4].map(function (r) {
+      var copy = Object.assign({}, r);
+      copy.invoice = '';
+      copy.invoiceThumb = '';
+      return copy;
+    });
     var label = includeImages ? 'كاملة' : 'بدون صور';
     var payload = {
       app: 'TIOS Warehouse',
@@ -6394,7 +6508,8 @@ function createBackup(includeImages) {
       products: products,
       history: res[1],
       historyArchive: res[2],
-      orders: res[3]
+      orders: res[3],
+      receipts: receipts
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     downloadBlob(blob, 'warehouse_backup_' + todayISO() + '.json');
@@ -6471,6 +6586,42 @@ function handleBackupFile(file) {
       return record;
     });
 
+    /* Receipts. A receipt needs an id and a date; its lines are a snapshot and
+       are kept as they were written, because that is the point of the record.
+       A line with no product id is dropped — it could not be traced back to
+       anything — and the units are normalised for the same reason products
+       are: a hand-edited file must not put kilos into a piece count. */
+    var cleanReceipts = (Array.isArray(payload.receipts) ? payload.receipts : [])
+      .filter(function (r) { return r && r.id; })
+      .map(function (r) {
+        var items = (Array.isArray(r.items) ? r.items : []).filter(function (l) {
+          return l && l.productId && (Number(l.qty) || 0) > 0;
+        }).map(function (l) {
+          var unit = l.unit;
+          for (var k = 0; k < UNITS.length; k++) if (UNITS[k].id === unit) break;
+          if (k === UNITS.length) unit = DEFAULT_UNIT;
+          var decimals = unitInfo(unit).decimals;
+          return {
+            productId: String(l.productId),
+            name: l.name ? String(l.name) : '',
+            articleNo: l.articleNo ? String(l.articleNo).trim() : '',
+            unit: unit,
+            qty: roundQty(Number(l.qty) || 0, decimals),
+            oldQty: roundQty(Number(l.oldQty) || 0, decimals),
+            newQty: roundQty(Number(l.newQty) || 0, decimals)
+          };
+        });
+        return {
+          id: String(r.id),
+          date: r.date ? String(r.date) : '',
+          createdAt: Number(r.createdAt) || Date.now(),
+          invoice: typeof r.invoice === 'string' ? r.invoice : '',
+          invoiceThumb: typeof r.invoiceThumb === 'string' ? r.invoiceThumb : '',
+          items: items
+        };
+      })
+      .filter(function (r) { return r.items.length > 0; });
+
     if (!clean.length) { showToast('لا توجد منتجات صالحة في الملف'); return; }
     if (!confirm('سيتم دمج ' + clean.length + ' منتج مع بياناتك الحالية.\n\nأي منتج له نفس المعرّف سيُستبدل. هل تريد المتابعة؟')) return;
 
@@ -6521,9 +6672,11 @@ function handleBackupFile(file) {
       .then(function () { return putManyHistory(history); })
       .then(function () { return putManyArchivedHistory(archived); })
       .then(function () { return putManyOrders(cleanOrders); })
+      .then(function () { return putManyReceipts(cleanReceipts); })
       .then(function () {
         showToast('تمت استعادة ' + clean.length + ' منتج' +
-          (cleanOrders.length ? ' و' + cleanOrders.length + ' طلب' : ''));
+          (cleanOrders.length ? ' و' + cleanOrders.length + ' طلب' : '') +
+          (cleanReceipts.length ? ' و' + cleanReceipts.length + ' استلام' : ''));
         return renderProducts().then(renderWarnings).then(renderOrderBadge);
       })
       .catch(function (error) {
@@ -6535,13 +6688,18 @@ function handleBackupFile(file) {
 }
 
 function deleteAllData() {
-  return Promise.all([getAllProducts(), getAllOrders().catch(function () { return []; })])
+  return Promise.all([
+    getAllProducts(),
+    getAllOrders().catch(function () { return []; }),
+    getAllReceipts().catch(function () { return []; })
+  ])
     .then(function (res) {
     var products = res[0];
     var orders = res[1];
-    if (!products.length && !orders.length) { showToast('لا توجد بيانات لحذفها'); return; }
+    var receipts = res[2];
+    if (!products.length && !orders.length && !receipts.length) { showToast('لا توجد بيانات لحذفها'); return; }
     if (!confirm('حذف جميع البيانات؟\n\nسيتم حذف ' + products.length + ' منتج و' +
-        orders.length + ' طلب وكل سجل الحركات نهائياً.')) return;
+        orders.length + ' طلب و' + receipts.length + ' استلام وكل سجل الحركات نهائياً.')) return;
     if (!confirm('تأكيد أخير: لا يمكن التراجع عن هذه العملية.\n\nهل أنت متأكد؟')) return;
     return clearAllStores().then(function () {
       showToast('تم حذف جميع البيانات');
@@ -6596,25 +6754,141 @@ function renderArchivePage() {
   var host = $('archive-content');
   if (!host) return Promise.resolve();
 
-  return getAllProductsCached().then(function (all) {
-    var items = archivedOf(all).sort(function (a, b) {
+  /* Two kinds of record share this tab, and they answer two different
+     questions. The list above is "what is no longer on the shelf"; the list
+     below is "what came in, and where is its invoice" — a delivery record that
+     would otherwise have nowhere to live, because it is neither a product nor
+     a customer order. */
+  return Promise.all([
+    getAllProductsCached(),
+    getAllReceipts().catch(function () { return []; })
+  ]).then(function (res) {
+    var items = archivedOf(res[0]).sort(function (a, b) {
       return (b.archivedAt || 0) - (a.archivedAt || 0);
     });
+    var receipts = res[1];
 
+    var html = '';
     if (!items.length) {
-      host.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🗃️</div>' +
+      html += '<div class="empty-state"><div class="empty-state-icon">🗃️</div>' +
         '<p>ما فيه منتجات في الأرشيف.<br>أي منتج توصل كميته إلى صفر ينتقل إلى هنا تلقائياً.</p></div>';
-      return;
+    } else {
+      html += '<div class="loc-summary">' +
+          '<div class="loc-summary-main">' + items.length + '</div>' +
+          '<div class="loc-summary-sub">' +
+            (items.length === 1 ? 'منتج واحد' : items.length === 2 ? 'منتجان' : items.length + ' منتجات') +
+            ' في الأرشيف</div>' +
+          '<div class="loc-summary-sub" style="margin-top:6px">اضغط على المنتج ثم ＋ لإعادته إلى الرف</div>' +
+        '</div>' +
+        '<div class="loc-card">' + items.map(archiveItemHTML).join('') + '</div>';
     }
 
-    host.innerHTML = '<div class="loc-summary">' +
-        '<div class="loc-summary-main">' + items.length + '</div>' +
-        '<div class="loc-summary-sub">' +
-          (items.length === 1 ? 'منتج واحد' : items.length === 2 ? 'منتجان' : items.length + ' منتجات') +
-          ' في الأرشيف</div>' +
-        '<div class="loc-summary-sub" style="margin-top:6px">اضغط على المنتج ثم ＋ لإعادته إلى الرف</div>' +
+    host.innerHTML = html + receiptsSectionHTML(receipts);
+  });
+}
+
+/* ---- Received goods ------------------------------------------------------
+   Every save from the receiving sheet lands here, with its invoice photo if one
+   was attached. Nothing is filtered: a receipt is a record of a day, and the
+   day someone is looking for is usually not the most recent one. */
+function receiptsSectionHTML(receipts) {
+  var head = '<div class="arch-head">📥 بضائع تم استلامها' +
+    (receipts.length ? '<span class="count-chip">' + receipts.length + '</span>' : '') +
+    '</div>';
+
+  if (!receipts.length) {
+    return head + '<div class="form-hint" style="margin:0">كل استلام تسجّله من زر «استلام بضاعة» ' +
+      'يُحفظ هنا مع أصنافه، وصورة الفاتورة إن أرفقتها.</div>';
+  }
+  return head + receipts.map(receiptCardHTML).join('');
+}
+
+function receiptCardHTML(r) {
+  var items = r.items || [];
+  var thumb = r.invoice
+    ? '<img src="' + esc(r.invoiceThumb || r.invoice) + '" alt="">'
+    : '<span aria-hidden="true">📄</span>';
+  var names = items.map(function (l) { return l.name; }).filter(Boolean).slice(0, 4).join('، ');
+
+  return '<div class="rcv-rec" data-action="open-receipt" data-receipt-id="' + esc(r.id) + '">' +
+      '<div class="rcv-rec-thumb">' + thumb + '</div>' +
+      '<div class="rcv-rec-body">' +
+        '<div class="rcv-rec-title">استلام ' + esc(fmtDate(r.date)) + '</div>' +
+        '<div class="rcv-rec-meta">' + items.length + ' ' +
+          plural(items.length, 'صنف', 'صنفان', 'أصناف') + ' · سُجّل ' + esc(fmtDateTime(r.createdAt)) +
+          (r.invoice ? ' · 📎 فاتورة' : '') + '</div>' +
+        (names ? '<div class="rcv-rec-items">' + esc(names) + (items.length > 4 ? ' …' : '') + '</div>' : '') +
       '</div>' +
-      '<div class="loc-card">' + items.map(archiveItemHTML).join('') + '</div>';
+    '</div>';
+}
+
+function openReceiptDetails(id) {
+  receiptDetailsId = id;
+  renderReceiptDetails();
+  openModal('receipt-details-modal');
+}
+
+function renderReceiptDetails() {
+  var host = $('receipt-details-body');
+  if (!host) return Promise.resolve();
+
+  return getReceipt(receiptDetailsId).then(function (r) {
+    if (!r) {
+      host.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📥</div>' +
+        '<p>هذا الاستلام لم يعد موجوداً.</p></div>';
+      return;
+    }
+    var items = r.items || [];
+
+    var head = '<div class="order-summary" style="margin-bottom:14px">' +
+        '<b>تاريخ الاستلام:</b> ' + esc(fmtDate(r.date)) + '<br>' +
+        '<b>سُجّل:</b> ' + esc(fmtDateTime(r.createdAt)) + '<br>' +
+        '<b>عدد الأصناف:</b> ' + items.length +
+      '</div>';
+
+    var invoice = r.invoice
+      ? '<div class="form-group">' +
+          '<img class="rcv-inv-img" src="' + esc(r.invoice) + '" alt="صورة الفاتورة" ' +
+            'data-action="view-receipt-photo" style="max-height:280px">' +
+          '<div class="rcv-inv-note">اضغط الصورة لعرضها بالحجم الكامل.</div>' +
+        '</div>'
+      : '<div class="form-hint" style="margin:0 0 14px">لم تُرفق فاتورة مع هذا الاستلام.</div>';
+
+    var lines = items.map(function (l) {
+      var unit = l.unit;
+      return '<div class="rcv-det-line">' +
+          '<div class="rcv-det-info">' +
+            '<div class="rcv-det-name">' + esc(l.name || 'صنف بلا اسم') + '</div>' +
+            '<div class="rcv-det-meta">' + esc('الكمية ' + formatQty(l.oldQty, unit) +
+              ' ← ' + formatQty(l.newQty, unit)) +
+              (l.articleNo ? ' · رقم الصنف ' + esc(String(l.articleNo)) : '') + '</div>' +
+          '</div>' +
+          '<span class="rcv-det-qty">+' + esc(formatAmount(l.qty, unit)) + '</span>' +
+        '</div>';
+    }).join('');
+
+    host.innerHTML = head + invoice +
+      '<div class="form-label" style="margin-bottom:4px">الأصناف التي أُضيفت</div>' + lines +
+      '<button class="btn btn-danger btn-block" style="margin-top:16px" data-action="delete-receipt" ' +
+        'data-receipt-id="' + esc(r.id) + '">🗑️ حذف سجل الاستلام</button>' +
+      '<div class="rcv-inv-note" style="text-align:center">الحذف يمسح السجل والصورة فقط — الكميات تبقى في المخزون.</div>';
+  });
+}
+
+/* Deleting a receipt does NOT take the stock back out. The delivery happened,
+   and its history rows are already part of the products' own record; reversing
+   it here would double-count stock in the other direction. The confirm says so
+   in plain words rather than letting the user find out later. */
+function deleteReceiptRecord(id) {
+  if (!confirm('حذف سجل هذا الاستلام؟\n\nالكميات التي أُضيفت للمخزون تبقى كما هي — ' +
+      'الحذف يمسح السجل وصورة الفاتورة فقط.')) return Promise.resolve();
+  return deleteReceiptFromDB(id).then(function () {
+    closeModal('receipt-details-modal');
+    showToast('تم حذف سجل الاستلام');
+    return renderArchivePage();
+  }).catch(function (error) {
+    console.error(error);
+    showToast('تعذّر حذف السجل');
   });
 }
 
@@ -7843,19 +8117,77 @@ function deleteOrderById(orderId) {
    receipt and its date, which is what answers "where did these 30 come from?"
    a month later. */
 
-var receiptDraft = null;      /* { date: 'YYYY-MM-DD', lines: [...] } */
+var receiptDraft = null;      /* { date, invoice, lines: [...] } */
 var receiptPickTerm = '';
+var receiptDetailsId = '';    /* the receipt open in the details sheet */
+var invoiceViewSrc = '';      /* the invoice the photo viewer is showing */
 
 function openReceipt() {
-  if (!receiptDraft) receiptDraft = { date: todayISO(), lines: [] };
+  if (!receiptDraft) receiptDraft = { date: todayISO(), invoice: '', invoiceThumb: '', lines: [] };
   if (!receiptDraft.date) receiptDraft.date = todayISO();
+  if (typeof receiptDraft.invoice !== 'string') receiptDraft.invoice = '';
+  if (typeof receiptDraft.invoiceThumb !== 'string') receiptDraft.invoiceThumb = '';
   receiptPickTerm = '';
   $('receipt-date').value = receiptDraft.date;
   $('receipt-search').value = '';
   var pick = $('receipt-pick-results');
   if (pick) pick.innerHTML = '';
+  renderReceiptInvoice();
   renderReceiptLines();
   openModal('receipt-modal');
+}
+
+/* The invoice is optional, so an empty one has to read as an invitation rather
+   than as a required field the user forgot. */
+function renderReceiptInvoice() {
+  var host = $('receipt-invoice');
+  if (!host) return;
+  var src = receiptDraft && receiptDraft.invoice;
+
+  if (!src) {
+    host.innerHTML = '<button type="button" class="rcv-inv-add" data-action="attach-receipt-photo">' +
+        '<span aria-hidden="true">📷</span><span>أرفق صورة الفاتورة</span></button>' +
+      '<div class="rcv-inv-note">اختياري — إن أرفقتها تُحفظ مع الاستلام وتظهر في الأرشيف مع أصنافه.</div>';
+    return;
+  }
+
+  host.innerHTML = '<img class="rcv-inv-img" src="' + esc(src) + '" alt="صورة الفاتورة" ' +
+      'data-action="view-receipt-photo">' +
+    '<div class="rcv-inv-tools">' +
+      '<button type="button" class="btn btn-outline" data-action="attach-receipt-photo">🔄 تغيير الصورة</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="remove-receipt-photo">🗑 إزالة</button>' +
+    '</div>' +
+    '<div class="rcv-inv-note">تُحفظ مع هذا الاستلام. اضغط الصورة لعرضها بالحجم الكامل.</div>';
+}
+
+/* Invoices are read, not admired: they are photographed at 1800 px rather than
+   the 1200 px a product photo gets, because the whole point of keeping one is
+   being able to read a line off it later. */
+function handleReceiptPhoto(file) {
+  if (!file) return Promise.resolve();
+  if (!/^image\//.test(file.type)) { showToast('الملف المختار ليس صورة'); return Promise.resolve(); }
+  if (file.size > 30 * 1024 * 1024) { showToast('الصورة كبيرة جداً (أكثر من 30 ميجابايت)'); return Promise.resolve(); }
+
+  showToast('جارٍ معالجة صورة الفاتورة…');
+  return makePhoto(file, INVOICE_MAX).then(function (photo) {
+    if (!receiptDraft) return;
+    /* Both renditions are kept. The archive draws one small card per delivery,
+       and decoding fifty 1800 px invoices to fill fifty 56 px squares is how
+       that tab would come to a crawl on a phone. */
+    receiptDraft.invoice = photo.full;
+    receiptDraft.invoiceThumb = photo.thumb;
+    renderReceiptInvoice();
+    showToast('تم إرفاق صورة الفاتورة');
+  }).catch(function (err) {
+    console.error(err);
+    showToast('تعذّر معالجة الصورة');
+  });
+}
+
+function openInvoicePhoto(src) {
+  if (!src) return;
+  invoiceViewSrc = src;
+  openPhotoViewer('invoice', 0);
 }
 
 function receiptLineMeta(line) {
@@ -8004,12 +8336,13 @@ function removeReceiptLine(productId) {
 }
 
 function clearReceiptDraft() {
-  if (!receiptDraft || !receiptDraft.lines.length) { showToast('القائمة فاضية'); return; }
+  if (!receiptDraft || (!receiptDraft.lines.length && !receiptDraft.invoice)) { showToast('القائمة فاضية'); return; }
   if (!confirm('إفراغ قائمة الاستلام؟\n\nلن يُحفظ شيء، ولن تتغير أي كمية في المخزون.')) return;
-  receiptDraft = { date: $('receipt-date').value || todayISO(), lines: [] };
+  receiptDraft = { date: $('receipt-date').value || todayISO(), invoice: '', invoiceThumb: '', lines: [] };
   receiptPickTerm = '';
   $('receipt-search').value = '';
   $('receipt-pick-results').innerHTML = '';
+  renderReceiptInvoice();
   renderReceiptLines();
 }
 
@@ -8080,7 +8413,8 @@ function saveReceipt() {
         oldQty: have,
         newQty: newQty,
         add: add,
-        restored: have <= 0
+        restored: have <= 0,
+        line: line
       });
     });
 
@@ -8101,12 +8435,36 @@ function saveReceipt() {
       };
     });
 
+    /* The delivery itself, kept as a document: the invoice photo the user
+       attached (if any) and the lines that came in on it, written as a
+       snapshot. The products above will change again next month; this row
+       must not, because it is the record of what arrived today. */
+    var record = {
+      id: 'r_' + now + '_' + Math.random().toString(36).slice(2, 7),
+      date: date,
+      createdAt: now,
+      invoice: receiptDraft.invoice || '',
+      invoiceThumb: receiptDraft.invoiceThumb || '',
+      items: updates.map(function (u) {
+        return {
+          productId: u.copy.id,
+          name: u.line.name || u.copy.name || '',
+          articleNo: u.line.articleNo || '',
+          unit: u.line.unit,
+          qty: u.add,
+          oldQty: u.oldQty,
+          newQty: u.newQty
+        };
+      })
+    };
+
     return new Promise(function (resolve, reject) {
-      var transaction = tx(['products', 'history'], 'readwrite');
+      var transaction = tx(['products', 'history', 'receipts'], 'readwrite');
       var products = transaction.objectStore('products');
       var history = transaction.objectStore('history');
       updates.forEach(function (u) { products.put(u.copy); });
       entries.forEach(function (e) { history.add(e); });
+      transaction.objectStore('receipts').put(record);
       transaction.oncomplete = function () { resolve(); };
       transaction.onerror = function () { reject(transaction.error); };
       transaction.onabort = function () { reject(transaction.error); };
@@ -8116,10 +8474,12 @@ function saveReceipt() {
       var countText = updates.length === 1 ? 'صنف واحد'
         : updates.length === 2 ? 'صنفين'
         : updates.length + ' أصناف';
+      var hadInvoice = !!record.invoice;
       receiptDraft = null;
       closeModal('receipt-modal');
       showToast('تمت إضافة ' + countText + ' للمخزون' +
         (restored ? (restored === 1 ? '، وواحد رجع من الأرشيف' : '، و' + restored + ' رجعوا من الأرشيف') : '') +
+        (hadInvoice ? ' — مع صورة الفاتورة' : '') +
         (gone.length ? ' — و' + gone.length + ' لم يوجد' : ''));
       return refreshAfterReceipt();
     });
@@ -8690,6 +9050,22 @@ var ACTIONS = {
   'add-receipt-line': function (el) { addReceiptLine(el.dataset.productId); },
   'remove-receipt-line': function (el) { removeReceiptLine(el.dataset.productId); },
   'scan-receipt-line': function () { openScanner('receipt-line'); },
+  'attach-receipt-photo': function () {
+    var input = $('receipt-photo');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  },
+  'remove-receipt-photo': function () {
+    if (!receiptDraft) return;
+    receiptDraft.invoice = '';
+    receiptDraft.invoiceThumb = '';
+    renderReceiptInvoice();
+    showToast('أُزيلت صورة الفاتورة');
+  },
+  'view-receipt-photo': function (el) { openInvoicePhoto(el.getAttribute('src')); },
+  'open-receipt': function (el) { var id = el.dataset.receiptId; if (id) openReceiptDetails(id); },
+  'delete-receipt': function (el) { deleteReceiptRecord(el.dataset.receiptId); },
   'show-more': function () { showMoreProducts(); },
   'show-archive': function () { showArchivedHistory(); },
   'archive-now': function () { runArchiveSweep(true); },
@@ -8923,6 +9299,10 @@ function wireUp() {
     if (el.dataset.action === 'receipt-line-expiry') {
       setReceiptLineExpiry(el.dataset.productId, el.value);
     }
+  });
+  $('receipt-photo').addEventListener('change', function (e) {
+    handleReceiptPhoto(e.target.files && e.target.files[0]);
+    e.target.value = '';
   });
 
   /* The review list edits in place — a quantity corrected here is the one that
